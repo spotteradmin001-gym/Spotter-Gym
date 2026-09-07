@@ -16,8 +16,10 @@ import {
   createPermissionRequest,
   decidePermissionRequest,
   employeeCan,
+  getEmployeeIdByUserId,
   listEmployees,
   listPermissionRequests,
+  listPermissionsForUser,
   setPermissions,
 } from "./employees";
 import { createGym } from "./gyms";
@@ -97,6 +99,28 @@ dbSuite("createEmployee + permissions", () => {
     });
     expect((await employeeCan(emp!.userId, "payment.record")).allowed).toBe(false);
     expect((await employeeCan(emp!.userId, "member.edit")).allowed).toBe(true);
+  });
+
+  it("listPermissionsForUser returns exactly the granted subset; getEmployeeIdByUserId resolves", async () => {
+    const [emp] = await listEmployees(gymId);
+    await setPermissions({
+      gymId,
+      employeeId: emp!.id,
+      grantedBy: ownerId,
+      permissions: [
+        { permission: "payment.record", requiresApproval: false },
+        { permission: "expense.create", requiresApproval: true },
+      ],
+    });
+
+    const perms = await listPermissionsForUser(emp!.userId);
+    expect(new Set(perms.map((p) => p.permission))).toEqual(
+      new Set(["payment.record", "expense.create"]),
+    );
+    expect(perms.find((p) => p.permission === "expense.create")?.requiresApproval).toBe(true);
+
+    expect(await getEmployeeIdByUserId(emp!.userId)).toBe(emp!.id);
+    expect(await listPermissionsForUser(ownerId)).toEqual([]); // owner isn't an employee
   });
 });
 
