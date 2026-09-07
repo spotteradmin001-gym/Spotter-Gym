@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/src/features/auth/guards";
 
@@ -5,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const user = await requireUser();
+  if (user.role === "admin") redirect("/admin/gyms");
 
   return (
     <div className="mx-auto w-full max-w-2xl">
