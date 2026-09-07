@@ -4,14 +4,18 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
+  AuthError,
   MemberError,
   createMember,
+  createMemberActivationToken,
   generateDuesForGym,
   setMemberFee,
   setMemberStatus,
   updateMember,
   type MemberStatus,
 } from "@/db/queries";
+import { appUrl } from "@/lib/app-url";
+import { MailSendError, sendMail } from "@/lib/mail";
 import { rupeesToPaise } from "@/lib/money";
 import { err, ok, type ActionState } from "@/lib/result";
 import { requireOwnerGym } from "@/src/features/auth/owner-scope";
@@ -76,6 +80,45 @@ export async function updateMemberAction(
   } catch (error) {
     return err(toMessage(error));
   }
+}
+
+export type ActivationLinkResult = { link: string; emailed: boolean };
+
+export async function sendActivationLinkAction(
+  _prev: ActionState<ActivationLinkResult>,
+  formData: FormData,
+): Promise<ActionState<ActivationLinkResult>> {
+  const { gymId } = await requireOwnerGym();
+  const memberId = String(formData.get("memberId") ?? "");
+
+  let token: string;
+  let email: string | null;
+  try {
+    const result = await createMemberActivationToken(gymId, memberId);
+    token = result.token;
+    email = result.member.email;
+  } catch (error) {
+    if (error instanceof AuthError) return err(error.message);
+    return err("Something went wrong. Try again.");
+  }
+
+  const link = `${appUrl()}/activate/${token}`;
+  let emailed = false;
+  if (email) {
+    try {
+      await sendMail({
+        to: email,
+        subject: "Set up your Spotter login",
+        text:
+          "Your gym has invited you to Spotter. Open this link to choose a " +
+          `password (valid for 7 days):\n${link}`,
+      });
+      emailed = true;
+    } catch (error) {
+      if (!(error instanceof MailSendError)) throw error;
+    }
+  }
+  return ok({ link, emailed });
 }
 
 export async function regenerateDuesAction(): Promise<void> {

@@ -9,6 +9,7 @@ export * from "./gyms";
 export * from "./users";
 export * from "./config";
 export * from "./members";
+export * from "./member-app";
 export * from "./dues";
 export * from "./payments";
 export * from "./employees";
