@@ -12,11 +12,12 @@ import {
 } from "@/db/schema";
 
 import { AuthError, createUser } from "./auth";
-
-export { EMPLOYEE_PERMISSIONS, PERMISSION_LABELS } from "@/lib/permissions";
+import { addExpense, updateExpense } from "./expenses";
 import { createMember, updateMember } from "./members";
 import { recordPayment } from "./payments";
 import { setUserActive } from "./users";
+
+export { EMPLOYEE_PERMISSIONS, PERMISSION_LABELS } from "@/lib/permissions";
 
 export type Permission = (typeof EMPLOYEE_PERMISSIONS)[number];
 
@@ -375,8 +376,24 @@ async function applyRequestedAction(
         recordedBy: actorUserId,
       });
       return;
+    case "expense.create":
+      await addExpense({
+        gymId,
+        label: s("label"),
+        amountPaise: n("amountPaise") ?? 0,
+        incurredOn: s("incurredOn"),
+        categoryId: s("categoryId") || null,
+        addedBy: actorUserId,
+      });
+      return;
+    case "expense.edit":
+      await updateExpense(gymId, s("expenseId"), {
+        label: s("label") || undefined,
+        amountPaise: n("amountPaise"),
+        incurredOn: s("incurredOn") || undefined,
+      });
+      return;
     default:
-      // expense.* land in Batch 3.6
       throw new EmployeeError("That action can't be approved yet.");
   }
 }
