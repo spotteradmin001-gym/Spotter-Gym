@@ -9,7 +9,40 @@ const dbSuite = process.env.DATABASE_URL ? describe : describe.skip;
 
 import { closeDb, db } from "@/db/client";
 import { gyms, members } from "@/db/schema";
-import { generateDuesForGym, listDuesForMember } from "./dues";
+import {
+  generateDuesForGym,
+  listDuesForMember,
+  summariseMemberDues,
+  type Due,
+} from "./dues";
+
+describe("summariseMemberDues (pure)", () => {
+  const due = (over: Partial<Due>): Due => ({
+    id: "d",
+    memberId: "m",
+    gymId: "g",
+    periodMonth: "2026-09-01",
+    amountDuePaise: 100000,
+    dueDate: "2026-09-05",
+    status: "pending",
+    createdAt: "2026-09-01T00:00:00.000Z",
+    ...over,
+  });
+
+  it("sums only pending dues and picks the soonest as next", () => {
+    const result = summariseMemberDues([
+      due({ id: "1", status: "paid", dueDate: "2026-08-05" }),
+      due({ id: "2", dueDate: "2026-10-05", amountDuePaise: 120000 }),
+      due({ id: "3", dueDate: "2026-09-05", amountDuePaise: 100000 }),
+    ]);
+    expect(result.pendingPaise).toBe(220000);
+    expect(result.nextDue?.dueDate).toBe("2026-09-05");
+  });
+
+  it("nextDue is null when nothing is pending", () => {
+    expect(summariseMemberDues([due({ status: "paid" })]).nextDue).toBeNull();
+  });
+});
 import { createGym, updateGym } from "./gyms";
 import { createMember, setMemberStatus } from "./members";
 

@@ -121,6 +121,28 @@ export async function listDuesForMember(
   return rows.map(mapDue);
 }
 
+export type MemberDuesOverview = {
+  pendingPaise: number;
+  nextDue: { periodMonth: string; dueDate: string; amountDuePaise: number } | null;
+};
+
+/** Total unpaid dues and the soonest one, for a member's own payments view. */
+export function summariseMemberDues(dues: Due[]): MemberDuesOverview {
+  const pending = dues.filter((d) => d.status === "pending");
+  const pendingPaise = pending.reduce((s, d) => s + d.amountDuePaise, 0);
+  const nextDue = [...pending].sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
+  return {
+    pendingPaise,
+    nextDue: nextDue
+      ? {
+          periodMonth: nextDue.periodMonth,
+          dueDate: nextDue.dueDate,
+          amountDuePaise: nextDue.amountDuePaise,
+        }
+      : null,
+  };
+}
+
 export async function listDuesForGym(
   gymId: string,
   opts: { status?: DueStatus } = {},
