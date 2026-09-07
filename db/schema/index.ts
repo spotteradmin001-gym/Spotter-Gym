@@ -11,4 +11,5 @@
  *   - every check constraint is explicitly named so tests can assert it by name
  */
 
+export * from "./gyms";
 export * from "./auth";
