@@ -9,6 +9,7 @@ import {
   listDuesForMember,
   listPayments,
   listProfileFields,
+  listRecentCheckins,
 } from "@/db/queries";
 import { formatPaise } from "@/lib/money";
 import { requireOwner } from "@/src/features/auth/guards";
@@ -29,11 +30,12 @@ export default async function OwnerMemberDetailPage({
   if (!user.gymId) notFound();
   const { memberId } = await params;
 
-  const [member, fields, memberDues, memberPayments] = await Promise.all([
+  const [member, fields, memberDues, memberPayments, checkins] = await Promise.all([
     getMember(user.gymId, memberId),
     listProfileFields(user.gymId),
     listDuesForMember(user.gymId, memberId),
     listPayments(user.gymId, { memberId }),
+    listRecentCheckins(user.gymId, memberId, 20),
   ]);
   if (!member) notFound();
 
@@ -202,10 +204,29 @@ export default async function OwnerMemberDetailPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Attendance</CardTitle>
+          <CardTitle>Attendance ({checkins.length})</CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-muted">
-          Shown here once QR check-in (Phase 5) lands.
+        <CardContent className="p-0">
+          {checkins.length === 0 ? (
+            <p className="p-4 text-sm text-muted">No check-ins yet.</p>
+          ) : (
+            <Table>
+              <THead>
+                <TR>
+                  <TH>Date</TH>
+                  <TH>Distance</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {checkins.map((c) => (
+                  <TR key={c.date}>
+                    <TD>{c.date}</TD>
+                    <TD>{c.distanceM == null ? "—" : `${c.distanceM} m`}</TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

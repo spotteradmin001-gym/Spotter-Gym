@@ -15,6 +15,7 @@ export * from "./gyms";
 export * from "./auth";
 export * from "./config";
 export * from "./members";
+export * from "./checkins";
 export * from "./dues";
 export * from "./payments";
 export * from "./employees";

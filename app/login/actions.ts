@@ -25,6 +25,10 @@ export async function loginAction(
 ): Promise<ActionState> {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
+  const nextRaw = String(formData.get("next") ?? "");
+  // Only same-origin relative paths — never an open redirect.
+  const next =
+    nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : "";
 
   if (!email || !password) {
     return err("Enter your email and password.");
@@ -49,5 +53,6 @@ export async function loginAction(
   const { sessionId } = await createSession(user.id);
   await setSessionCookie(sessionId);
 
-  redirect(user.mustChangePassword ? "/change-password" : "/dashboard");
+  if (user.mustChangePassword) redirect("/change-password");
+  redirect(next || "/dashboard");
 }

@@ -111,6 +111,11 @@ export async function getGym(id: string): Promise<Gym | null> {
   return row ? mapGym(row) : null;
 }
 
+export async function getGymBySlug(slug: string): Promise<Gym | null> {
+  const [row] = await db.select().from(gyms).where(eq(gyms.slug, slug)).limit(1);
+  return row ? mapGym(row) : null;
+}
+
 export type GymPatch = Partial<{
   name: string;
   timezone: string;

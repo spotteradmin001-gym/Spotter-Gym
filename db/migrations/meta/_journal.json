@@ -71,6 +71,13 @@
       "when": 1788823969337,
       "tag": "0009_nostalgic_forge",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788824604962,
+      "tag": "0010_dashing_eddie_brock",
+      "breakpoints": true
     }
   ]
 }
