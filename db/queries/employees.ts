@@ -94,6 +94,36 @@ export async function createEmployee(input: {
   };
 }
 
+/** The permissions granted to an employee's login (empty if not an employee). */
+export async function listPermissionsForUser(
+  userId: string,
+): Promise<EmployeePermission[]> {
+  const rows = await db
+    .select({
+      permission: employeePermissions.permission,
+      requiresApproval: employeePermissions.requiresApproval,
+    })
+    .from(employeePermissions)
+    .innerJoin(employees, eq(employees.id, employeePermissions.employeeId))
+    .where(eq(employees.userId, userId));
+  return rows.map((r) => ({
+    permission: r.permission as Permission,
+    requiresApproval: r.requiresApproval,
+  }));
+}
+
+/** The roster id for an employee's login, or null. */
+export async function getEmployeeIdByUserId(
+  userId: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ id: employees.id })
+    .from(employees)
+    .where(eq(employees.userId, userId))
+    .limit(1);
+  return row?.id ?? null;
+}
+
 export async function listEmployees(gymId: string): Promise<Employee[]> {
   const rows = await db
     .select({
