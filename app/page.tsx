@@ -1,8 +1,17 @@
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 export default function Home() {
   return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-      <h1 className="text-2xl font-semibold">Spotter</h1>
-      <p className="text-sm text-zinc-500">Setup in progress — Phase 0.</p>
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-4 p-8">
+      <Card>
+        <CardHeader>
+          <CardTitle>Spotter</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-muted">
+          Gym membership, payments, and WhatsApp reminders. Sign-in arrives in
+          Phase 1.
+        </CardContent>
+      </Card>
     </main>
   );
 }
