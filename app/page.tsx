@@ -1,3 +1,6 @@
+import Link from "next/link";
+
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function Home() {
@@ -7,9 +10,11 @@ export default function Home() {
         <CardHeader>
           <CardTitle>Spotter</CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-muted">
-          Gym membership, payments, and WhatsApp reminders. Sign-in arrives in
-          Phase 1.
+        <CardContent className="flex flex-col gap-4 text-sm text-muted">
+          <p>Gym membership, payments, and WhatsApp reminders.</p>
+          <Link href="/login">
+            <Button className="w-full">Sign in</Button>
+          </Link>
         </CardContent>
       </Card>
     </main>

@@ -6,9 +6,12 @@
  * DDL — pgbouncer in transaction mode cannot run migrations — so drizzle-kit
  * and `db/migrate.ts` use it.
  *
- * Import `./load-env` before calling these so local `.env.local` is populated.
+ * Env population is the caller's job: the Next app has `.env*` loaded by Next,
+ * vitest by `vitest.config.ts`, and the standalone scripts (`db/migrate.ts`,
+ * `drizzle.config.ts`) import `./load-env` themselves. This module never
+ * touches the filesystem, so importing it into a Server Component doesn't drag
+ * `node:fs` and a whole-project trace into the serverless bundle.
  */
-import "./load-env";
 
 /**
  * Pooled connection string for the app runtime.
