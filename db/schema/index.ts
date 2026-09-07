@@ -9,8 +9,6 @@
  *   - INR money as integer columns named *_paise, or numeric where fractions matter
  *   - created_at / updated_at as timestamptz default now()
  *   - every check constraint is explicitly named so tests can assert it by name
- *
- * Empty for now — Phase 1 Batch 1.1 adds `./auth`.
  */
 
-export {};
+export * from "./auth";

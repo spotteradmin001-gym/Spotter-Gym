@@ -30,11 +30,16 @@ jobs:
 
       - name: Test
         run: npm test
+        env:
+          # Neon preview branch. Until these repo secrets are set the db/**
+          # integration suites skip themselves (see db/queries/auth.test.ts);
+          # the rest of the tests always run.
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
 
       - name: Build
         run: npm run build
         env:
-          # No DB reads during the Phase 0 build. When db/** tests or
-          # build-time queries land, add DATABASE_URL / DATABASE_URL_UNPOOLED
-          # repo secrets (Neon preview branch) and pass them here.
           NEXT_TELEMETRY_DISABLED: "1"
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
