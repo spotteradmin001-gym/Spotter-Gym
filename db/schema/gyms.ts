@@ -40,6 +40,12 @@ export const gyms = pgTable(
     checkinRadiusM: integer("checkin_radius_m").notNull().default(100),
     wahaSessionName: text("waha_session_name"),
     defaultMonthlyFeePaise: integer("default_monthly_fee_paise"),
+    // How a member's monthly due date is decided: 'per_member' uses each
+    // member's own billing_anchor_day; 'fixed' bills everyone on
+    // billing_anchor_day below. (Open question #4: no proration either way —
+    // the first full period starts on the next anchor day.)
+    billingAnchorMode: text("billing_anchor_mode").notNull().default("per_member"),
+    billingAnchorDay: integer("billing_anchor_day").notNull().default(1),
     reminderDaysBefore: integer("reminder_days_before").notNull().default(3),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -48,5 +54,7 @@ export const gyms = pgTable(
   (t) => [
     check("gyms_reminder_days_before_check", sql`${t.reminderDaysBefore} between 0 and 30`),
     check("gyms_checkin_radius_check", sql`${t.checkinRadiusM} between 10 and 5000`),
+    check("gyms_billing_anchor_mode_check", sql`${t.billingAnchorMode} in ('per_member', 'fixed')`),
+    check("gyms_billing_anchor_day_check", sql`${t.billingAnchorDay} between 1 and 28`),
   ],
 );

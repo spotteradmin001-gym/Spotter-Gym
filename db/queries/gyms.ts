@@ -24,6 +24,8 @@ export type Gym = {
   checkinRadiusM: number;
   wahaSessionName: string | null;
   defaultMonthlyFeePaise: number | null;
+  billingAnchorMode: "per_member" | "fixed";
+  billingAnchorDay: number;
   reminderDaysBefore: number;
   isActive: boolean;
   createdAt: string;
@@ -42,6 +44,8 @@ function mapGym(row: typeof gyms.$inferSelect): Gym {
     checkinRadiusM: row.checkinRadiusM,
     wahaSessionName: row.wahaSessionName ?? null,
     defaultMonthlyFeePaise: row.defaultMonthlyFeePaise ?? null,
+    billingAnchorMode: row.billingAnchorMode as "per_member" | "fixed",
+    billingAnchorDay: row.billingAnchorDay,
     reminderDaysBefore: row.reminderDaysBefore,
     isActive: row.isActive,
     createdAt: row.createdAt.toISOString(),
@@ -116,6 +120,8 @@ export type GymPatch = Partial<{
   checkinRadiusM: number;
   wahaSessionName: string | null;
   defaultMonthlyFeePaise: number | null;
+  billingAnchorMode: "per_member" | "fixed";
+  billingAnchorDay: number;
   reminderDaysBefore: number;
 }>;
 
@@ -161,6 +167,18 @@ export async function updateGym(id: string, patch: GymPatch): Promise<Gym> {
       throw new GymError("Reminder lead time must be between 0 and 30 days.");
     }
     set.reminderDaysBefore = patch.reminderDaysBefore;
+  }
+  if (patch.billingAnchorMode !== undefined) {
+    if (!["per_member", "fixed"].includes(patch.billingAnchorMode)) {
+      throw new GymError("Pick a valid billing mode.");
+    }
+    set.billingAnchorMode = patch.billingAnchorMode;
+  }
+  if (patch.billingAnchorDay !== undefined) {
+    if (patch.billingAnchorDay < 1 || patch.billingAnchorDay > 28) {
+      throw new GymError("Billing day must be between 1 and 28.");
+    }
+    set.billingAnchorDay = patch.billingAnchorDay;
   }
 
   const [row] = await db

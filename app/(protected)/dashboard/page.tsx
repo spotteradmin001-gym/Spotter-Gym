@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   const user = await requireUser();
   if (user.role === "admin") redirect("/admin/gyms");
+  if (user.role === "owner") redirect("/owner");
 
   return (
     <div className="mx-auto w-full max-w-2xl">
