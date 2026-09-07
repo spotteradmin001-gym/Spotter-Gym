@@ -1,5 +1,3 @@
-import "./load-env";
-
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 

@@ -212,6 +212,49 @@ export async function getSessionUser(
   return mapUser(row.user);
 }
 
+/**
+ * Self-service password change for a signed-in user. Verifies the current
+ * password, enforces the strength bar, clears `mustChangePassword`, and revokes
+ * every session for the user — including the request's own, so a leaked cookie
+ * (possibly the reason for the change) stops working immediately. The caller
+ * clears the cookie and sends the user back through login.
+ */
+export async function changeOwnPassword(input: {
+  userId: string;
+  currentPassword: string;
+  newPassword: string;
+}): Promise<void> {
+  const [row] = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, input.userId))
+    .limit(1);
+  if (!row) {
+    throw new AuthError("That account no longer exists.");
+  }
+  if (!verifyPassword(input.currentPassword, row.passwordHash)) {
+    throw new AuthError("Current password is incorrect.");
+  }
+  if (!isPasswordStrongEnough(input.newPassword)) {
+    throw new AuthError(
+      `New password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+    );
+  }
+  if (input.newPassword === input.currentPassword) {
+    throw new AuthError("Choose a password you haven't used before.");
+  }
+
+  await db
+    .update(users)
+    .set({
+      passwordHash: hashPassword(input.newPassword),
+      mustChangePassword: false,
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, input.userId));
+  await db.delete(sessions).where(eq(sessions.userId, input.userId));
+}
+
 /** Logout — revokes exactly this one session. */
 export async function deleteSession(sessionId: string): Promise<void> {
   if (!sessionId) return;

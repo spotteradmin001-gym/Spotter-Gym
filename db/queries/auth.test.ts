@@ -23,6 +23,7 @@ import { sessions, users } from "@/db/schema";
 import { verifyPassword } from "@/src/features/auth/password";
 import {
   AuthError,
+  changeOwnPassword,
   createSession,
   createUser,
   deleteAllUserSessions,
@@ -203,5 +204,50 @@ dbSuite("sessions", () => {
     await deleteAllUserSessions(row!.id);
     expect(await getSessionUser(a.sessionId)).toBeNull();
     expect(await getSessionUser(b.sessionId)).toBeNull();
+  });
+});
+
+dbSuite("changeOwnPassword", () => {
+  const EMAIL_CHANGE = "test_auth_change@example.com";
+
+  it("swaps the hash, clears must_change_password, and revokes every session", async () => {
+    const { user, password } = await createUser({
+      email: EMAIL_CHANGE,
+      role: "admin",
+    });
+    createdUserIds.push(user.id);
+    const live = await createSession(user.id);
+    createdSessionIds.push(live.sessionId);
+
+    await changeOwnPassword({
+      userId: user.id,
+      currentPassword: password,
+      newPassword: "brand-new-pw-9",
+    });
+
+    const row = await getUserByEmail(EMAIL_CHANGE);
+    expect(row!.mustChangePassword).toBe(false);
+    expect(verifyPassword("brand-new-pw-9", row!.passwordHash)).toBe(true);
+    expect(verifyPassword(password, row!.passwordHash)).toBe(false);
+    expect(await getSessionUser(live.sessionId)).toBeNull();
+  });
+
+  it("rejects a wrong current password and a too-short new one", async () => {
+    const row = await getUserByEmail(EMAIL_CHANGE);
+    await expect(
+      changeOwnPassword({
+        userId: row!.id,
+        currentPassword: "not-it",
+        newPassword: "another-good-pw",
+      }),
+    ).rejects.toThrow("Current password is incorrect.");
+
+    await expect(
+      changeOwnPassword({
+        userId: row!.id,
+        currentPassword: "brand-new-pw-9",
+        newPassword: "short",
+      }),
+    ).rejects.toBeInstanceOf(AuthError);
   });
 });
