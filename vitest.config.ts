@@ -36,6 +36,7 @@ export default defineConfig({
       "src/**/*.test.ts",
       "src/**/*.test.tsx",
       "db/**/*.test.ts",
+      "lib/**/*.test.ts",
       "app/**/*.test.ts",
       "app/**/*.test.tsx",
       "test/**/*.test.ts",
