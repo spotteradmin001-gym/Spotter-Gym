@@ -14,13 +14,14 @@
  * count; other suites and the seeded admin share the `users` table.
  */
 import { eq, inArray, like } from "drizzle-orm";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const dbSuite = process.env.DATABASE_URL ? describe : describe.skip;
 
 import { closeDb, db } from "@/db/client";
-import { passwordResetTokens, sessions, users } from "@/db/schema";
+import { gyms, passwordResetTokens, sessions, users } from "@/db/schema";
 import { verifyPassword } from "@/src/features/auth/password";
+import { createGym } from "./gyms";
 import {
   AuthError,
   changeOwnPassword,
@@ -35,7 +36,6 @@ import {
   verifyLogin,
 } from "./auth";
 
-const GYM_ID = "test_auth_gym_0000";
 const EMAIL_ADMIN = "test_auth_admin@example.com";
 const EMAIL_OWNER = "test_auth_owner@example.com";
 const EMAIL_LOGIN = "test_auth_login@example.com";
@@ -45,7 +45,15 @@ const EMAIL_DUP = "test_auth_dup@example.com";
 const createdUserIds: string[] = [];
 const createdSessionIds: string[] = [];
 
+// A real gym row — users.gym_id is a foreign key (onDelete: restrict), so a
+// non-admin fixture needs a gym that actually exists.
+let GYM_ID = "";
+
 if (process.env.DATABASE_URL) {
+  beforeAll(async () => {
+    GYM_ID = (await createGym({ name: "test_auth Fixture Gym" })).id;
+  });
+
   afterAll(async () => {
     if (createdSessionIds.length) {
       await db.delete(sessions).where(inArray(sessions.id, createdSessionIds));
@@ -54,6 +62,7 @@ if (process.env.DATABASE_URL) {
       await db.delete(sessions).where(inArray(sessions.userId, createdUserIds));
     }
     await db.delete(users).where(like(users.email, "test_auth_%"));
+    await db.delete(gyms).where(like(gyms.name, "test_auth %"));
     await closeDb();
   });
 }

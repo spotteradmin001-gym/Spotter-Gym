@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 import { boolean, check, index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
+import { gyms } from "./gyms";
+
 /**
  * Phase 1 — login and the four roles.
  *
@@ -9,8 +11,9 @@ import { boolean, check, index, pgTable, text, timestamp } from "drizzle-orm/pg-
  *   The `users_gym_scope_check` constraint enforces "admin ⇔ no gym, everyone
  *   else ⇔ a gym" at the database level.
  *
- * `gymId` has no foreign key yet — the `gyms` table lands in Phase 2 Batch
- * 2.1, which adds `ALTER TABLE users ADD CONSTRAINT users_gym_id_fk ...`.
+ * `gymId` references `gyms.id` with `onDelete: restrict` — a gym with any user
+ * attached can't be hard-deleted (deactivate it instead). Added in Phase 2
+ * Batch 2.1, once the `gyms` table existed.
  *
  * Password storage: scrypt, "saltHex:hashHex" (src/features/auth/password.ts).
  * `mustChangePassword` is set whenever staff create an account or reset its
@@ -30,7 +33,7 @@ export const users = pgTable(
     phone: text("phone"),
     passwordHash: text("password_hash").notNull(),
     role: text("role").notNull(),
-    gymId: text("gym_id"),
+    gymId: text("gym_id").references(() => gyms.id, { onDelete: "restrict" }),
     isActive: boolean("is_active").notNull().default(true),
     mustChangePassword: boolean("must_change_password").notNull().default(true),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
