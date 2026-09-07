@@ -4,10 +4,16 @@ import { notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
-import { getMember, listDuesForMember, listProfileFields } from "@/db/queries";
+import {
+  getMember,
+  listDuesForMember,
+  listPayments,
+  listProfileFields,
+} from "@/db/queries";
 import { formatPaise } from "@/lib/money";
 import { requireOwner } from "@/src/features/auth/guards";
 
+import { RecordPaymentForm } from "../../payments/record-payment-form";
 import { setMemberStatusAction } from "../actions";
 import { EditMemberForm, MemberFeeForm } from "./member-forms";
 
@@ -22,12 +28,15 @@ export default async function OwnerMemberDetailPage({
   if (!user.gymId) notFound();
   const { memberId } = await params;
 
-  const [member, fields, memberDues] = await Promise.all([
+  const [member, fields, memberDues, memberPayments] = await Promise.all([
     getMember(user.gymId, memberId),
     listProfileFields(user.gymId),
     listDuesForMember(user.gymId, memberId),
+    listPayments(user.gymId, { memberId }),
   ]);
   if (!member) notFound();
+
+  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <div className="flex flex-col gap-4">
@@ -139,10 +148,54 @@ export default async function OwnerMemberDetailPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Payments & attendance</CardTitle>
+          <CardTitle>Record a payment</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <RecordPaymentForm
+            today={today}
+            fixedMember={{ id: member.id, name: member.name }}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Payment history</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {memberPayments.length === 0 ? (
+            <p className="p-4 text-sm text-muted">No payments recorded.</p>
+          ) : (
+            <Table>
+              <THead>
+                <TR>
+                  <TH>Date</TH>
+                  <TH>Amount</TH>
+                  <TH>Method</TH>
+                  <TH>Note</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {memberPayments.map((p) => (
+                  <TR key={p.id}>
+                    <TD>{p.paidOn}</TD>
+                    <TD>{formatPaise(p.amountPaise)}</TD>
+                    <TD>{p.method}</TD>
+                    <TD className="text-muted">{p.note ?? "—"}</TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Attendance</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-muted">
-          Shown here once payments (Batch 3.4) and check-in (Phase 5) land.
+          Shown here once QR check-in (Phase 5) lands.
         </CardContent>
       </Card>
     </div>

@@ -43,6 +43,13 @@
       "when": 1788802849869,
       "tag": "0005_aromatic_sandman",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788803327710,
+      "tag": "0006_fearless_tattoo",
+      "breakpoints": true
     }
   ]
 }

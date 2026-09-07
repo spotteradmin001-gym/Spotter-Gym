@@ -27,6 +27,29 @@ export function dueDateFor(periodMonth: string, anchorDay: number): string {
   return `${periodMonth.slice(0, 7)}-${String(anchorDay).padStart(2, "0")}`;
 }
 
+export type RangeKind = "month" | "quarter" | "year";
+
+/**
+ * An inclusive `[from, to]` pair of `YYYY-MM-DD` strings for a reporting range
+ * ending on `asOf`'s day: the current calendar month, the last 3 months, or the
+ * last 12 months.
+ */
+export function reportRange(kind: RangeKind, asOf: Date | string): {
+  from: string;
+  to: string;
+} {
+  const to =
+    typeof asOf === "string" ? asOf : asOf.toISOString().slice(0, 10);
+  const current = periodMonthOf(to);
+  const from =
+    kind === "month"
+      ? current
+      : kind === "quarter"
+        ? addMonths(current, -2)
+        : addMonths(current, -11);
+  return { from, to };
+}
+
 /**
  * The billing periods a member should have dues for as of `asOf`: the current
  * month and the next one. A due is only created when its `dueDate` is on or

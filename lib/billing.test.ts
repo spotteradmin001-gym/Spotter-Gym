@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { addMonths, dueDateFor, duePeriodsFor, periodMonthOf } from "./billing";
+import {
+  addMonths,
+  dueDateFor,
+  duePeriodsFor,
+  periodMonthOf,
+  reportRange,
+} from "./billing";
 
 describe("period arithmetic", () => {
   it("periodMonthOf snaps to the first of the month", () => {
@@ -17,6 +23,21 @@ describe("period arithmetic", () => {
   it("dueDateFor pins the anchor day", () => {
     expect(dueDateFor("2026-09-01", 5)).toBe("2026-09-05");
     expect(dueDateFor("2026-09-01", 20)).toBe("2026-09-20");
+  });
+
+  it("reportRange spans month / quarter / year ending on asOf", () => {
+    expect(reportRange("month", "2026-09-17")).toEqual({
+      from: "2026-09-01",
+      to: "2026-09-17",
+    });
+    expect(reportRange("quarter", "2026-09-17")).toEqual({
+      from: "2026-07-01",
+      to: "2026-09-17",
+    });
+    expect(reportRange("year", "2026-09-17")).toEqual({
+      from: "2025-10-01",
+      to: "2026-09-17",
+    });
   });
 });
 
