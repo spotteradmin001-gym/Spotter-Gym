@@ -10,3 +10,4 @@ export * from "./users";
 export * from "./config";
 export * from "./members";
 export * from "./dues";
+export * from "./payments";
