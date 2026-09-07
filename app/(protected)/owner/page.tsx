@@ -1,22 +1,93 @@
+import { notFound } from "next/navigation";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getGym } from "@/db/queries";
+import { getGym, ownerOverview } from "@/db/queries";
+import { formatPaise } from "@/lib/money";
 import { requireOwner } from "@/src/features/auth/guards";
 
 export const dynamic = "force-dynamic";
 
 export default async function OwnerOverviewPage() {
   const user = await requireOwner();
-  const gym = user.gymId ? await getGym(user.gymId) : null;
+  if (!user.gymId) notFound();
+
+  const [gym, overview] = await Promise.all([
+    getGym(user.gymId),
+    ownerOverview(user.gymId),
+  ]);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{gym?.name ?? "Your gym"}</CardTitle>
-      </CardHeader>
-      <CardContent className="text-sm text-muted">
-        The overview dashboard (profit, dues, member stats) is built in a later
-        batch. Start in Settings.
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>{gym?.name ?? "Your gym"}</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <Tile
+            label="This month, net"
+            value={formatPaise(overview.monthProfitPaise)}
+            tone={overview.monthProfitPaise < 0 ? "bad" : "good"}
+          />
+          <Tile label="Yet to receive" value={formatPaise(overview.outstandingPaise)} />
+          <Tile label="Due today" value={formatPaise(overview.dueTodayPaise)} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Members</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <Tile label="Active" value={String(overview.members.activeTotal)} />
+          <Tile label="Joined this month" value={String(overview.members.joinedThisMonth)} />
+          <Tile
+            label="Joined last 3 months"
+            value={String(overview.members.joinedLast3Months)}
+          />
+          <Tile
+            label="Not renewed this month"
+            value={String(overview.members.notRenewedThisMonth)}
+            tone={overview.members.notRenewedThisMonth > 0 ? "bad" : undefined}
+          />
+          <Tile
+            label="Not renewed last 3 months"
+            value={String(overview.members.notRenewedLast3Months)}
+            tone={overview.members.notRenewedLast3Months > 0 ? "bad" : undefined}
+          />
+        </CardContent>
+      </Card>
+
+      <p className="text-xs text-muted">
+        &ldquo;Not renewed&rdquo; = still an active member with a due whose date
+        has passed and is unpaid.
+      </p>
+    </div>
+  );
+}
+
+function Tile({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "good" | "bad";
+}) {
+  return (
+    <div className="flex flex-col rounded-md border border-border p-3">
+      <span className="text-xs text-muted">{label}</span>
+      <span
+        className={
+          tone === "bad"
+            ? "text-lg font-semibold text-destructive"
+            : tone === "good"
+              ? "text-lg font-semibold text-success"
+              : "text-lg font-semibold"
+        }
+      >
+        {value}
+      </span>
+    </div>
   );
 }
