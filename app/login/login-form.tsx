@@ -20,7 +20,7 @@ function SubmitButton() {
   );
 }
 
-export function LoginForm() {
+export function LoginForm({ next }: { next?: string }) {
   const [state, formAction] = useActionState<ActionState, FormData>(
     loginAction,
     null,
@@ -29,6 +29,7 @@ export function LoginForm() {
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
+      {next && <input type="hidden" name="next" value={next} />}
       <FormField htmlFor="login-email" label="Email">
         <Input
           id="login-email"

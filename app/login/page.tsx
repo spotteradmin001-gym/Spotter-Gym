@@ -11,14 +11,16 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ changed?: string }>;
+  searchParams: Promise<{ changed?: string; next?: string }>;
 }) {
   const user = await getSessionUser(await readSessionCookie());
   if (user) {
     redirect(user.mustChangePassword ? "/change-password" : "/dashboard");
   }
 
-  const { changed } = await searchParams;
+  const { changed, next } = await searchParams;
+  const safeNext =
+    next && next.startsWith("/") && !next.startsWith("//") ? next : undefined;
 
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-4 p-6">
@@ -32,7 +34,7 @@ export default async function LoginPage({
               Password updated — sign in with your new password.
             </p>
           )}
-          <LoginForm />
+          <LoginForm next={safeNext} />
         </CardContent>
       </Card>
     </main>
