@@ -9,3 +9,4 @@ export * from "./gyms";
 export * from "./users";
 export * from "./config";
 export * from "./members";
+export * from "./dues";

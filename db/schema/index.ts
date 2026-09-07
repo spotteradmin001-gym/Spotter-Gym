@@ -15,3 +15,4 @@ export * from "./gyms";
 export * from "./auth";
 export * from "./config";
 export * from "./members";
+export * from "./dues";

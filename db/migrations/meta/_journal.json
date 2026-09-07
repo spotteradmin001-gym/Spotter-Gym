@@ -36,6 +36,13 @@
       "when": 1788802443803,
       "tag": "0004_flowery_doomsday",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788802849869,
+      "tag": "0005_aromatic_sandman",
+      "breakpoints": true
     }
   ]
 }
