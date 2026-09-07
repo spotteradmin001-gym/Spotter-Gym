@@ -13,3 +13,4 @@ export * from "./dues";
 export * from "./payments";
 export * from "./employees";
 export * from "./expenses";
+export * from "./pnl";
