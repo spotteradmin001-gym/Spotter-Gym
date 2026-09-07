@@ -10,6 +10,7 @@ export default async function DashboardPage() {
   if (user.role === "admin") redirect("/admin/gyms");
   if (user.role === "owner") redirect("/owner");
   if (user.role === "employee") redirect("/employee");
+  if (user.role === "member") redirect("/m");
 
   return (
     <div className="mx-auto w-full max-w-2xl">

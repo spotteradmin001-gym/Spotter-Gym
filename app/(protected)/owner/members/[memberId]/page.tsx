@@ -15,6 +15,7 @@ import { requireOwner } from "@/src/features/auth/guards";
 
 import { RecordPaymentForm } from "../../payments/record-payment-form";
 import { setMemberStatusAction } from "../actions";
+import { ActivationPanel } from "./activation-panel";
 import { EditMemberForm, MemberFeeForm } from "./member-forms";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +72,15 @@ export default async function OwnerMemberDetailPage({
           />
           <Field label="Billing day" value={String(member.billingAnchorDay)} />
           <Field label="Status" value={member.status} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Member login</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ActivationPanel memberId={member.id} activated={member.userId != null} />
         </CardContent>
       </Card>
 

@@ -56,3 +56,25 @@ export const members = pgTable(
     index("members_gym_status_idx").on(t.gymId, t.status),
   ],
 );
+
+/**
+ * One-time link a member uses to set their login (Phase 5 Batch 5.1). Only the
+ * SHA-256 hash is stored; the raw token lives in the emailed / WhatsApp link.
+ * Single-use, 7-day expiry.
+ */
+export const memberActivationTokens = pgTable(
+  "member_activation_tokens",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    memberId: text("member_id")
+      .notNull()
+      .references(() => members.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("member_activation_tokens_member_idx").on(t.memberId)],
+);

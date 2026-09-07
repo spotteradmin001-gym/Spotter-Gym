@@ -171,6 +171,35 @@ export async function getMember(
   return mapMember(row, await gymDefaultFee(gymId));
 }
 
+/** The member record for an activated member's own login. */
+export async function getMemberByUserId(userId: string): Promise<Member | null> {
+  const [row] = await db
+    .select()
+    .from(members)
+    .where(eq(members.userId, userId))
+    .limit(1);
+  if (!row) return null;
+  return mapMember(row, await gymDefaultFee(row.gymId));
+}
+
+/** Merge answers into a member's `profile` jsonb (own-service, keyed by field key). */
+export async function updateMemberProfile(
+  memberId: string,
+  values: Record<string, string>,
+): Promise<void> {
+  const [row] = await db
+    .select({ profile: members.profile })
+    .from(members)
+    .where(eq(members.id, memberId))
+    .limit(1);
+  if (!row) throw new MemberError("That member no longer exists.");
+  const merged = { ...(row.profile as Record<string, string>), ...values };
+  await db
+    .update(members)
+    .set({ profile: merged, updatedAt: new Date() })
+    .where(eq(members.id, memberId));
+}
+
 export async function updateMember(
   gymId: string,
   id: string,
