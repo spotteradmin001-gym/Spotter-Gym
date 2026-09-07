@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -9,6 +10,7 @@ import { listMembers, type MemberStatus } from "@/db/queries";
 import { formatPaise } from "@/lib/money";
 import { requireOwner } from "@/src/features/auth/guards";
 
+import { regenerateDuesAction } from "./actions";
 import { AddMemberForm } from "./add-member-form";
 
 export const dynamic = "force-dynamic";
@@ -43,8 +45,15 @@ export default async function OwnerMembersPage({
       </Card>
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between gap-2">
-          <CardTitle>Members ({members.length})</CardTitle>
+        <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <CardTitle>Members ({members.length})</CardTitle>
+            <form action={regenerateDuesAction}>
+              <Button type="submit" variant="ghost" size="sm">
+                Regenerate dues
+              </Button>
+            </form>
+          </div>
           <form className="flex gap-2" method="get">
             <Input
               name="q"

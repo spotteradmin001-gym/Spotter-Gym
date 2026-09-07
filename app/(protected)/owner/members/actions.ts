@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import {
   MemberError,
   createMember,
+  generateDuesForGym,
   setMemberFee,
   setMemberStatus,
   updateMember,
@@ -75,6 +76,12 @@ export async function updateMemberAction(
   } catch (error) {
     return err(toMessage(error));
   }
+}
+
+export async function regenerateDuesAction(): Promise<void> {
+  const { gymId } = await requireOwnerGym();
+  await generateDuesForGym(gymId);
+  revalidatePath("/owner/members");
 }
 
 export async function setMemberStatusAction(formData: FormData): Promise<void> {

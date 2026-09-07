@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getMember, listProfileFields } from "@/db/queries";
+import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
+import { getMember, listDuesForMember, listProfileFields } from "@/db/queries";
 import { formatPaise } from "@/lib/money";
 import { requireOwner } from "@/src/features/auth/guards";
 
@@ -21,9 +22,10 @@ export default async function OwnerMemberDetailPage({
   if (!user.gymId) notFound();
   const { memberId } = await params;
 
-  const [member, fields] = await Promise.all([
+  const [member, fields, memberDues] = await Promise.all([
     getMember(user.gymId, memberId),
     listProfileFields(user.gymId),
+    listDuesForMember(user.gymId, memberId),
   ]);
   if (!member) notFound();
 
@@ -100,10 +102,47 @@ export default async function OwnerMemberDetailPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Dues, payments & attendance</CardTitle>
+          <CardTitle>Dues</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {memberDues.length === 0 ? (
+            <p className="p-4 text-sm text-muted">
+              No dues yet — use &ldquo;Regenerate dues&rdquo; on the members
+              list, or wait for the daily run.
+            </p>
+          ) : (
+            <Table>
+              <THead>
+                <TR>
+                  <TH>Period</TH>
+                  <TH>Due date</TH>
+                  <TH>Amount</TH>
+                  <TH>Status</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {memberDues.map((d) => (
+                  <TR key={d.id}>
+                    <TD>{d.periodMonth.slice(0, 7)}</TD>
+                    <TD>{d.dueDate}</TD>
+                    <TD>{formatPaise(d.amountDuePaise)}</TD>
+                    <TD className={d.status === "pending" ? "" : "text-muted"}>
+                      {d.status}
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Payments & attendance</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-muted">
-          Shown here once billing (Batch 3.3 / 3.4) and check-in (Phase 5) land.
+          Shown here once payments (Batch 3.4) and check-in (Phase 5) land.
         </CardContent>
       </Card>
     </div>
