@@ -1,9 +1,11 @@
 import "server-only";
 
+import { createHash, randomBytes } from "node:crypto";
+
 import { and, eq, gt } from "drizzle-orm";
 
 import { db } from "@/db/client";
-import { sessions, users } from "@/db/schema";
+import { passwordResetTokens, sessions, users } from "@/db/schema";
 import {
   generatePassword,
   hashPassword,
@@ -259,6 +261,87 @@ export async function changeOwnPassword(input: {
 export async function deleteSession(sessionId: string): Promise<void> {
   if (!sessionId) return;
   await db.delete(sessions).where(eq(sessions.id, sessionId));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Forgot password
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
+
+function hashToken(raw: string): string {
+  return createHash("sha256").update(raw).digest("hex");
+}
+
+/**
+ * Issues a reset token for an active account. Returns null when the email
+ * matches no active account — the caller shows the same generic response either
+ * way, so the distinction never leaves this function (no account enumeration).
+ * Any earlier unused tokens for the user are dropped so only the newest link
+ * works.
+ */
+export async function createPasswordResetToken(
+  rawEmail: string,
+): Promise<{ email: string; token: string } | null> {
+  const email = normalizeEmail(rawEmail);
+  const [row] = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
+  if (!row || !row.isActive) return null;
+
+  await db
+    .delete(passwordResetTokens)
+    .where(eq(passwordResetTokens.userId, row.id));
+
+  const token = randomBytes(32).toString("base64url");
+  await db.insert(passwordResetTokens).values({
+    userId: row.id,
+    tokenHash: hashToken(token),
+    expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS),
+  });
+
+  return { email: row.email, token };
+}
+
+/**
+ * Consumes a reset token: rejects an unknown, expired, or already-used token
+ * with one generic `AuthError`; otherwise sets the new password, clears
+ * `mustChangePassword`, marks the token used, and revokes every session.
+ */
+export async function resetPasswordWithToken(
+  rawToken: string,
+  newPassword: string,
+): Promise<void> {
+  const [row] = await db
+    .select()
+    .from(passwordResetTokens)
+    .where(eq(passwordResetTokens.tokenHash, hashToken(rawToken)))
+    .limit(1);
+
+  if (!row || row.usedAt || row.expiresAt.getTime() <= Date.now()) {
+    throw new AuthError("This reset link is invalid or has expired.");
+  }
+  if (!isPasswordStrongEnough(newPassword)) {
+    throw new AuthError(
+      `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+    );
+  }
+
+  await db
+    .update(users)
+    .set({
+      passwordHash: hashPassword(newPassword),
+      mustChangePassword: false,
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, row.userId));
+  await db
+    .update(passwordResetTokens)
+    .set({ usedAt: new Date() })
+    .where(eq(passwordResetTokens.id, row.id));
+  await db.delete(sessions).where(eq(sessions.userId, row.userId));
 }
 
 /**

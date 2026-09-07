@@ -19,17 +19,19 @@ import { afterAll, describe, expect, it } from "vitest";
 const dbSuite = process.env.DATABASE_URL ? describe : describe.skip;
 
 import { closeDb, db } from "@/db/client";
-import { sessions, users } from "@/db/schema";
+import { passwordResetTokens, sessions, users } from "@/db/schema";
 import { verifyPassword } from "@/src/features/auth/password";
 import {
   AuthError,
   changeOwnPassword,
+  createPasswordResetToken,
   createSession,
   createUser,
   deleteAllUserSessions,
   deleteSession,
   getSessionUser,
   getUserByEmail,
+  resetPasswordWithToken,
   verifyLogin,
 } from "./auth";
 
@@ -249,5 +251,72 @@ dbSuite("changeOwnPassword", () => {
         newPassword: "short",
       }),
     ).rejects.toBeInstanceOf(AuthError);
+  });
+});
+
+dbSuite("password reset tokens", () => {
+  const EMAIL_RESET = "test_auth_reset@example.com";
+
+  it("issues a token for an active account and null for an unknown email", async () => {
+    const { user } = await createUser({ email: EMAIL_RESET, role: "admin" });
+    createdUserIds.push(user.id);
+
+    const issued = await createPasswordResetToken(EMAIL_RESET.toUpperCase());
+    expect(issued?.email).toBe(EMAIL_RESET);
+    expect(issued?.token.length).toBeGreaterThan(20);
+
+    expect(await createPasswordResetToken("test_auth_nobody@example.com")).toBeNull();
+  });
+
+  it("stores only the token hash, never the raw token", async () => {
+    const issued = await createPasswordResetToken(EMAIL_RESET);
+    const rows = await db
+      .select()
+      .from(passwordResetTokens)
+      .where(
+        eq(
+          passwordResetTokens.userId,
+          (await getUserByEmail(EMAIL_RESET))!.id,
+        ),
+      );
+    expect(rows.length).toBe(1); // the previous token was replaced
+    expect(rows[0]!.tokenHash).not.toBe(issued!.token);
+    expect(rows[0]!.tokenHash).toHaveLength(64);
+  });
+
+  it("resets the password, consumes the token, and revokes sessions", async () => {
+    const user = (await getUserByEmail(EMAIL_RESET))!;
+    const session = await createSession(user.id);
+    createdSessionIds.push(session.sessionId);
+    const issued = await createPasswordResetToken(EMAIL_RESET);
+
+    await resetPasswordWithToken(issued!.token, "fresh-reset-pw-1");
+
+    const after = await getUserByEmail(EMAIL_RESET);
+    expect(verifyPassword("fresh-reset-pw-1", after!.passwordHash)).toBe(true);
+    expect(after!.mustChangePassword).toBe(false);
+    expect(await getSessionUser(session.sessionId)).toBeNull();
+
+    // reused token now rejected
+    await expect(
+      resetPasswordWithToken(issued!.token, "another-pw-2"),
+    ).rejects.toThrow("invalid or has expired");
+  });
+
+  it("rejects an unknown token and an expired token", async () => {
+    await expect(
+      resetPasswordWithToken("not-a-real-token", "whatever-pw-1"),
+    ).rejects.toThrow("invalid or has expired");
+
+    const user = (await getUserByEmail(EMAIL_RESET))!;
+    const issued = await createPasswordResetToken(EMAIL_RESET);
+    await db
+      .update(passwordResetTokens)
+      .set({ expiresAt: new Date(Date.now() - 1000) })
+      .where(eq(passwordResetTokens.userId, user.id));
+
+    await expect(
+      resetPasswordWithToken(issued!.token, "should-fail-pw-1"),
+    ).rejects.toThrow("invalid or has expired");
   });
 });

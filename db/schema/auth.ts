@@ -69,3 +69,27 @@ export const sessions = pgTable(
   },
   (t) => [index("sessions_user_id_idx").on(t.userId)],
 );
+
+/**
+ * Forgot-password flow (Batch 1.3). Only the SHA-256 hash of the token is
+ * stored — the raw token lives only in the emailed link — so a database leak
+ * can't be used to reset anyone's password. Single-use (`usedAt`) and short
+ * lived (`expiresAt`, 1 hour). Rows are disposable; a cron/manual sweep can
+ * delete expired ones, nothing depends on keeping them.
+ */
+export const passwordResetTokens = pgTable(
+  "password_reset_tokens",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("password_reset_tokens_user_id_idx").on(t.userId)],
+);
