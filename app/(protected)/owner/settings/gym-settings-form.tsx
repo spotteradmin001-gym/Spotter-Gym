@@ -96,13 +96,16 @@ export function GymSettingsForm({ gym }: { gym: Gym }) {
           defaultValue={gym.reminderDaysBefore}
         />
       </FormField>
-      <FormField
-        htmlFor="s-waha"
-        label="WAHA session name"
-        hint="The WhatsApp session this gym sends from. Live link status is checked by the local engine (Phase 6)."
-      >
-        <Input id="s-waha" name="wahaSessionName" defaultValue={gym.wahaSessionName ?? ""} />
-      </FormField>
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium">Reminders send from</span>
+        <p className="text-xs text-muted">
+          The WhatsApp session this gym sends from. Set by the Spotter team — ask
+          your admin to change it.
+        </p>
+        <p className="rounded-md border border-border bg-muted-background px-3 py-2 text-sm">
+          {gym.wahaSessionName ?? "—"}
+        </p>
+      </div>
       <div className="flex items-center gap-3 sm:col-span-2">
         <SaveButton />
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
