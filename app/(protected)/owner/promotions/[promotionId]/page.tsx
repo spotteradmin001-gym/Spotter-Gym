@@ -128,13 +128,31 @@ export default async function OwnerPromotionDetailPage({
         <CardHeader>
           <CardTitle>Billing</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-          <Stat label="Per message" value={formatPaise(promo.perMessagePaise)} />
-          <Stat label="Estimate" value={formatPaise(promo.estimatedTotalPaise)} />
-          <Stat label="Prepaid" value={formatPaise(promo.prepaidPaise)} />
-          <Stat label="Billed" value={formatPaise(promo.billedTotalPaise)} />
-          <Stat label="Refund due" value={formatPaise(promo.refundPaise)} />
-          <Stat label="Delivered parts" value={String(tally.deliveredParts)} />
+        <CardContent className="flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+            <Stat label="Per message" value={formatPaise(promo.perMessagePaise)} />
+            <Stat label="Estimate" value={formatPaise(promo.estimatedTotalPaise)} />
+            <Stat label="Prepaid" value={formatPaise(promo.prepaidPaise)} />
+            <Stat label="Billed" value={formatPaise(promo.billedTotalPaise)} />
+            <Stat label="Refund due" value={formatPaise(promo.refundPaise)} />
+            <Stat label="Delivered parts" value={String(tally.deliveredParts)} />
+          </div>
+          {promo.billedTotalPaise != null && (
+            <p className="text-sm">
+              Final bill {formatPaise(promo.billedTotalPaise)} of{" "}
+              {formatPaise(promo.prepaidPaise)} prepaid.{" "}
+              {promo.settlement === "refund_due" ? (
+                <span className="text-success">
+                  {formatPaise(promo.refundPaise)} refund due to you — the admin
+                  sends it offline.
+                </span>
+              ) : promo.settlement === "refunded" ? (
+                <span className="text-muted">Refund sent.</span>
+              ) : (
+                <span className="text-muted">Settled exactly.</span>
+              )}
+            </p>
+          )}
         </CardContent>
       </Card>
 

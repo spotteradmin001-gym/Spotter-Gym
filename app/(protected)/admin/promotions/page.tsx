@@ -2,7 +2,11 @@ import Link from "next/link";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
-import { listPromotionsWithGym, type PromotionWithGym } from "@/db/queries";
+import {
+  adminPromotionCounters,
+  listPromotionsWithGym,
+  type PromotionWithGym,
+} from "@/db/queries";
 import { formatPaise } from "@/lib/money";
 import {
   PROMOTION_SETTLEMENT_LABEL,
@@ -20,7 +24,10 @@ const OPEN_STATUSES = [
 ] as const;
 
 export default async function AdminPromotionsPage() {
-  const all = await listPromotionsWithGym();
+  const [all, counters] = await Promise.all([
+    listPromotionsWithGym(),
+    adminPromotionCounters(),
+  ]);
   const open = all.filter((p) =>
     (OPEN_STATUSES as readonly string[]).includes(p.status),
   );
@@ -30,6 +37,20 @@ export default async function AdminPromotionsPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>In flight</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-3 gap-3 text-sm sm:grid-cols-6">
+          <Counter label="Submitted" value={counters.submitted} highlight />
+          <Counter label="Priced" value={counters.priced} />
+          <Counter label="Approved" value={counters.approved} />
+          <Counter label="Paid" value={counters.paid} highlight />
+          <Counter label="Sending" value={counters.sending} />
+          <Counter label="Refund due" value={counters.refundDue} highlight />
+        </CardContent>
+      </Card>
+
       <PromotionTable
         title={`Queue (${open.length})`}
         rows={open}
@@ -41,6 +62,31 @@ export default async function AdminPromotionsPage() {
         empty="Nothing yet."
         showSettlement
       />
+    </div>
+  );
+}
+
+function Counter({
+  label,
+  value,
+  highlight,
+}: {
+  label: string;
+  value: number;
+  highlight?: boolean;
+}) {
+  return (
+    <div className="rounded-md border border-border p-2">
+      <p className="text-xs text-muted">{label}</p>
+      <p
+        className={
+          highlight && value > 0
+            ? "text-lg font-semibold text-destructive"
+            : "text-lg font-semibold"
+        }
+      >
+        {value}
+      </p>
     </div>
   );
 }
