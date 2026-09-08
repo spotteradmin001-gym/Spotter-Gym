@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
+import { WaContactLink } from "@/components/wa-contact-link";
 import { listMembers, type MemberStatus } from "@/db/queries";
 import { formatPaise } from "@/lib/money";
 import { requireOwner } from "@/src/features/auth/guards";
@@ -92,7 +93,15 @@ export default async function OwnerMembersPage({
                         {m.name}
                       </Link>
                     </TD>
-                    <TD>{m.phone}</TD>
+                    <TD>
+                      <span className="inline-flex items-center gap-1.5">
+                        {m.phone}
+                        <WaContactLink
+                          phone={m.phone}
+                          label={`Message ${m.name} on WhatsApp`}
+                        />
+                      </span>
+                    </TD>
                     <TD>
                       {formatPaise(m.resolvedFeePaise)}
                       {m.monthlyFeePaise == null && (

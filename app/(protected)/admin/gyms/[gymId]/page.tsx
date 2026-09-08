@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
+import { WaContactLink } from "@/components/wa-contact-link";
 import { countGymUsersByRole, getGym, listGymUsers } from "@/db/queries";
 
 import { setGymActiveAction, setUserActiveAction } from "../../actions";
@@ -78,6 +79,7 @@ export default async function AdminGymDetailPage({
               <THead>
                 <TR>
                   <TH>Email</TH>
+                  <TH>Contact</TH>
                   <TH>Status</TH>
                   <TH>Last login</TH>
                   <TH />
@@ -93,6 +95,12 @@ export default async function AdminGymDetailPage({
                       >
                         {owner.email}
                       </Link>
+                    </TD>
+                    <TD>
+                      <WaContactLink
+                        phone={owner.phone}
+                        label={`Message ${owner.email} on WhatsApp`}
+                      />
                     </TD>
                     <TD className={owner.isActive ? "" : "text-muted"}>
                       {owner.isActive ? "Active" : "Inactive"}

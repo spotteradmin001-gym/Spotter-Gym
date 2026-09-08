@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { ShareViaWhatsApp } from "@/components/share-via-whatsapp";
 import { Button } from "@/components/ui/button";
 import type { ActionState } from "@/lib/result";
 
@@ -42,6 +43,12 @@ export function ActivationPanel({
             Or share this link (valid 7 days):{" "}
             <code className="font-mono">{state.data.link}</code>
           </p>
+          <div className="mt-2">
+            <ShareViaWhatsApp
+              phone={state.data.phone}
+              message={state.data.shareMessage}
+            />
+          </div>
         </div>
       )}
       {state && !state.ok && (

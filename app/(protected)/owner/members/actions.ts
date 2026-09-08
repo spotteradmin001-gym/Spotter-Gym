@@ -9,6 +9,7 @@ import {
   createMember,
   createMemberActivationToken,
   generateDuesForGym,
+  getGym,
   setMemberFee,
   setMemberStatus,
   updateMember,
@@ -19,6 +20,7 @@ import { appUrl } from "@/lib/app-url";
 import { MailSendError, sendMail } from "@/lib/mail";
 import { rupeesToPaise } from "@/lib/money";
 import { err, ok, type ActionState } from "@/lib/result";
+import { memberActivationMessage } from "@/lib/wa-templates";
 import { requireOwnerGym } from "@/src/features/auth/owner-scope";
 
 function toMessage(error: unknown): string {
@@ -91,7 +93,12 @@ export async function updateMemberAction(
   }
 }
 
-export type ActivationLinkResult = { link: string; emailed: boolean };
+export type ActivationLinkResult = {
+  link: string;
+  emailed: boolean;
+  phone: string | null;
+  shareMessage: string;
+};
 
 export async function sendActivationLinkAction(
   _prev: ActionState<ActivationLinkResult>,
@@ -102,16 +109,26 @@ export async function sendActivationLinkAction(
 
   let token: string;
   let email: string | null;
+  let phone: string | null = null;
+  let memberName = "";
   try {
     const result = await createMemberActivationToken(gymId, memberId);
     token = result.token;
     email = result.member.email;
+    phone = result.member.phone ?? null;
+    memberName = result.member.name;
   } catch (error) {
     if (error instanceof AuthError) return err(error.message);
     return err("Something went wrong. Try again.");
   }
 
   const link = `${appUrl()}/activate/${token}`;
+  const gym = await getGym(gymId);
+  const shareMessage = memberActivationMessage({
+    name: memberName,
+    gymName: gym?.name ?? "your gym",
+    activationLink: link,
+  });
   let emailed = false;
   if (email) {
     try {
@@ -127,7 +144,7 @@ export async function sendActivationLinkAction(
       if (!(error instanceof MailSendError)) throw error;
     }
   }
-  return ok({ link, emailed });
+  return ok({ link, emailed, phone, shareMessage });
 }
 
 export async function regenerateDuesAction(): Promise<void> {

@@ -13,7 +13,9 @@ import {
   updateGym,
   writeAudit,
 } from "@/db/queries";
+import { appUrl } from "@/lib/app-url";
 import { err, ok, type ActionState } from "@/lib/result";
+import { ownerWelcomeMessage } from "@/lib/wa-templates";
 import { requireUserForAction } from "@/src/features/auth/guards";
 
 function toMessage(error: unknown): string {
@@ -82,7 +84,12 @@ export async function updateGymWahaSessionAction(
   }
 }
 
-export type CreateOwnerResult = { email: string; password: string };
+export type CreateOwnerResult = {
+  email: string;
+  password: string;
+  phone: string | null;
+  shareMessage: string;
+};
 
 export async function createOwnerAction(
   _prev: ActionState<CreateOwnerResult>,
@@ -108,8 +115,20 @@ export async function createOwnerAction(
       targetId: user.id,
       meta: { email: user.email },
     });
+    const gym = await getGym(gymId);
+    const shareMessage = ownerWelcomeMessage({
+      gymName: gym?.name ?? "your gym",
+      loginUrl: `${appUrl()}/login`,
+      email: user.email,
+      tempPassword: password,
+    });
     revalidatePath(`/admin/gyms/${gymId}`);
-    return ok({ email: user.email, password });
+    return ok({
+      email: user.email,
+      password,
+      phone: user.phone ?? null,
+      shareMessage,
+    });
   } catch (error) {
     return err(toMessage(error));
   }

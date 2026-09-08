@@ -6,13 +6,16 @@ import {
   EMPLOYEE_PERMISSIONS,
   EmployeeError,
   createEmployee,
+  getGym,
   setEmployeeActive,
   setPermissions,
   writeAudit,
   type EmployeePermission,
   type Permission,
 } from "@/db/queries";
+import { appUrl } from "@/lib/app-url";
 import { err, ok, type ActionState } from "@/lib/result";
+import { employeeWelcomeMessage } from "@/lib/wa-templates";
 import { requireOwnerGym } from "@/src/features/auth/owner-scope";
 
 function toMessage(error: unknown): string {
@@ -20,7 +23,12 @@ function toMessage(error: unknown): string {
   return "Something went wrong. Try again.";
 }
 
-export type CreateEmployeeResult = { email: string; password: string };
+export type CreateEmployeeResult = {
+  email: string;
+  password: string;
+  phone: string | null;
+  shareMessage: string;
+};
 
 export async function createEmployeeAction(
   _prev: ActionState<CreateEmployeeResult>,
@@ -43,8 +51,21 @@ export async function createEmployeeAction(
       targetId: employee.id,
       meta: { email: employee.email },
     });
+    const gym = await getGym(gymId);
+    const shareMessage = employeeWelcomeMessage({
+      name: employee.name,
+      gymName: gym?.name ?? "your gym",
+      loginUrl: `${appUrl()}/login`,
+      email: employee.email,
+      tempPassword: password,
+    });
     revalidatePath("/owner/employees");
-    return ok({ email: employee.email, password });
+    return ok({
+      email: employee.email,
+      password,
+      phone: employee.phone ?? null,
+      shareMessage,
+    });
   } catch (error) {
     return err(toMessage(error));
   }
