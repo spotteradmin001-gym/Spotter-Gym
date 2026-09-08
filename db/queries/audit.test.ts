@@ -10,7 +10,12 @@ const dbSuite = process.env.DATABASE_URL ? describe : describe.skip;
 
 import { closeDb, db } from "@/db/client";
 import { audits, employees, gyms, users } from "@/db/schema";
-import { listAudits, listStaffActivity, writeAudit } from "./audit";
+import {
+  STAFF_ACTIVITY_ACTIONS,
+  listAudits,
+  listStaffActivity,
+  writeAudit,
+} from "./audit";
 import { createGym } from "./gyms";
 
 let gymId = "";
@@ -284,5 +289,60 @@ dbSuite("listStaffActivity", () => {
     });
     expect(justEmp1.length).toBeGreaterThan(0);
     expect(justEmp1.every((r) => r.actorUserId === saEmp1)).toBe(true);
+  });
+
+  it("surfaces rows written through writeAudit by the wired employee actions", async () => {
+    // The exact shapes app/(protected)/employee/actions.ts now writes.
+    await writeAudit({
+      actorUserId: saEmp1,
+      actorRole: "employee",
+      gymId: saGymA,
+      action: "permission_request.filed",
+      targetType: "permission_request",
+      targetId: "req-1",
+      meta: { actionType: "member.create" },
+    });
+    await writeAudit({
+      actorUserId: saEmp1,
+      actorRole: "employee",
+      gymId: saGymA,
+      action: "expense.create",
+      targetType: "expense",
+      targetId: null,
+      meta: { amountPaise: 50000, label: "Cleaning supplies" },
+    });
+    await writeAudit({
+      actorUserId: saEmp2,
+      actorRole: "employee",
+      gymId: saGymA,
+      action: "member.edit",
+      targetType: "member",
+      targetId: "m-9",
+    });
+
+    const rows = await listStaffActivity(saGymA, { period: "month" });
+    const byAction = new Map(rows.map((r) => [r.action, r]));
+    expect(byAction.has("permission_request.filed")).toBe(true);
+    expect(byAction.get("expense.create")?.amountPaise).toBe(50000);
+    expect(byAction.get("expense.create")?.targetType).toBe("expense");
+    expect(byAction.has("member.edit")).toBe(true);
+  });
+});
+
+describe("STAFF_ACTIVITY_ACTIONS", () => {
+  it("covers every employee business event the owner view needs", () => {
+    const actions: string[] = [...STAFF_ACTIVITY_ACTIONS];
+    for (const a of [
+      "payment.record",
+      "member.create",
+      "member.edit",
+      "expense.create",
+      "expense.edit",
+      "permission_request.filed",
+      "approval.approved",
+      "approval.rejected",
+    ]) {
+      expect(actions).toContain(a);
+    }
   });
 });

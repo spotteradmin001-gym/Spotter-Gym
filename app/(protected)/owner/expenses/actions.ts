@@ -11,6 +11,7 @@ import {
   deleteRecurringExpense,
   materializeRecurringForGym,
   setRecurringActive,
+  writeAudit,
 } from "@/db/queries";
 import { rupeesToPaise } from "@/lib/money";
 import { err, ok, type ActionState } from "@/lib/result";
@@ -86,14 +87,24 @@ export async function addExpenseAction(
   const { user, gymId } = await requireOwnerGym();
   const amount = paiseFrom(formData, "amountRupees");
   if (amount < 0) return err("Enter a valid amount.");
+  const label = String(formData.get("label") ?? "");
   try {
     await addExpense({
       gymId,
-      label: String(formData.get("label") ?? ""),
+      label,
       amountPaise: amount,
       incurredOn: String(formData.get("incurredOn") ?? ""),
       categoryId: String(formData.get("categoryId") ?? "") || null,
       addedBy: user.id,
+    });
+    await writeAudit({
+      actorUserId: user.id,
+      actorRole: user.role,
+      gymId,
+      action: "expense.create",
+      targetType: "expense",
+      targetId: null,
+      meta: { amountPaise: amount, label },
     });
     revalidatePath("/owner/expenses");
     return ok();

@@ -12,10 +12,14 @@ import {
   createPermissionRequest,
   recordPayment,
   updateMember,
+  writeAudit,
 } from "@/db/queries";
 import { rupeesToPaise } from "@/lib/money";
 import { err, ok, type ActionState } from "@/lib/result";
-import { requireEmployeePermission } from "@/src/features/auth/employee-scope";
+import {
+  requireEmployeePermission,
+  type EmployeeContext,
+} from "@/src/features/auth/employee-scope";
 
 type Outcome = { pending: boolean };
 
@@ -36,6 +40,26 @@ function feePaise(form: FormData, key: string): number | null {
   if (s === "") return null;
   const n = Number(s);
   return Number.isFinite(n) && n >= 0 ? rupeesToPaise(n) : null;
+}
+
+/**
+ * Records that an employee filed an approval request. Feeds the owner's
+ * staff-activity view; `meta.actionType` says what write is waiting.
+ */
+async function auditRequestFiled(
+  ctx: EmployeeContext,
+  requestId: string,
+  actionType: string,
+): Promise<void> {
+  await writeAudit({
+    actorUserId: ctx.user.id,
+    actorRole: "employee",
+    gymId: ctx.gymId,
+    action: "permission_request.filed",
+    targetType: "permission_request",
+    targetId: requestId,
+    meta: { actionType },
+  });
 }
 
 export async function createMemberOrRequest(
@@ -61,15 +85,28 @@ export async function createMemberOrRequest(
 
   try {
     if (requiresApproval) {
-      await createPermissionRequest({
+      const requestId = await createPermissionRequest({
         gymId: ctx.gymId,
         employeeId: ctx.employeeId,
         actionType: "member.create",
         payload,
       });
+      await auditRequestFiled(ctx, requestId, "member.create");
       return ok({ pending: true });
     }
-    await createMember({ gymId: ctx.gymId, ...payload, email: payload.email || undefined });
+    const member = await createMember({
+      gymId: ctx.gymId,
+      ...payload,
+      email: payload.email || undefined,
+    });
+    await writeAudit({
+      actorUserId: ctx.user.id,
+      actorRole: "employee",
+      gymId: ctx.gymId,
+      action: "member.create",
+      targetType: "member",
+      targetId: member.id,
+    });
     revalidatePath("/employee/members");
     return ok({ pending: false });
   } catch (error) {
@@ -99,12 +136,13 @@ export async function updateMemberOrRequest(
 
   try {
     if (requiresApproval) {
-      await createPermissionRequest({
+      const requestId = await createPermissionRequest({
         gymId: ctx.gymId,
         employeeId: ctx.employeeId,
         actionType: "member.edit",
         payload,
       });
+      await auditRequestFiled(ctx, requestId, "member.edit");
       return ok({ pending: true });
     }
     await updateMember(ctx.gymId, memberId, {
@@ -112,6 +150,14 @@ export async function updateMemberOrRequest(
       phone: payload.phone || undefined,
       email: (payload.email.trim() || null) as string | null,
       billingAnchorDay: payload.billingAnchorDay,
+    });
+    await writeAudit({
+      actorUserId: ctx.user.id,
+      actorRole: "employee",
+      gymId: ctx.gymId,
+      action: "member.edit",
+      targetType: "member",
+      targetId: memberId,
     });
     revalidatePath(`/employee/members/${memberId}`);
     return ok({ pending: false });
@@ -146,15 +192,29 @@ export async function recordPaymentOrRequest(
 
   try {
     if (requiresApproval) {
-      await createPermissionRequest({
+      const requestId = await createPermissionRequest({
         gymId: ctx.gymId,
         employeeId: ctx.employeeId,
         actionType: "payment.record",
         payload,
       });
+      await auditRequestFiled(ctx, requestId, "payment.record");
       return ok({ pending: true });
     }
     await recordPayment({ gymId: ctx.gymId, ...payload, recordedBy: ctx.user.id });
+    await writeAudit({
+      actorUserId: ctx.user.id,
+      actorRole: "employee",
+      gymId: ctx.gymId,
+      action: "payment.record",
+      targetType: "member",
+      targetId: payload.memberId,
+      meta: {
+        amountPaise: payload.amountPaise,
+        method: payload.method,
+        paidOn: payload.paidOn,
+      },
+    });
     revalidatePath("/employee/payments");
     return ok({ pending: false });
   } catch (error) {
@@ -185,12 +245,13 @@ export async function addExpenseOrRequest(
 
   try {
     if (requiresApproval) {
-      await createPermissionRequest({
+      const requestId = await createPermissionRequest({
         gymId: ctx.gymId,
         employeeId: ctx.employeeId,
         actionType: "expense.create",
         payload,
       });
+      await auditRequestFiled(ctx, requestId, "expense.create");
       return ok({ pending: true });
     }
     await addExpense({
@@ -198,6 +259,15 @@ export async function addExpenseOrRequest(
       ...payload,
       categoryId: payload.categoryId || null,
       addedBy: ctx.user.id,
+    });
+    await writeAudit({
+      actorUserId: ctx.user.id,
+      actorRole: "employee",
+      gymId: ctx.gymId,
+      action: "expense.create",
+      targetType: "expense",
+      targetId: null,
+      meta: { amountPaise: payload.amountPaise, label: payload.label },
     });
     revalidatePath("/employee/expenses");
     return ok({ pending: false });
