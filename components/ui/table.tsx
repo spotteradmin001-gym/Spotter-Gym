@@ -2,12 +2,37 @@ import type { ComponentProps } from "react";
 
 import { cn } from "@/lib/cn";
 
-/** Table wrapped in a horizontal scroll container so wide tables never push the page. */
-export function Table({ className, ...props }: ComponentProps<"table">) {
+type TableVariant = "scroll" | "stacked";
+
+export type TableProps = ComponentProps<"table"> & {
+  /**
+   * How the table behaves below the `sm` breakpoint:
+   * - `"scroll"` (default): the desktop `<table>` stays, wrapped in a
+   *   horizontal scroll container. Keep this for wide numeric tables
+   *   (P&L, payments) where column alignment carries meaning.
+   * - `"stacked"`: each row collapses to a labelled card. Give every `TD`
+   *   a `label` (or `data-label`) so each cell keeps its column name.
+   */
+  variant?: TableVariant;
+};
+
+/**
+ * Desktop tables that stay usable on a phone.
+ *
+ * Above `sm` both variants render an ordinary `<table>`. Below `sm`,
+ * `variant="stacked"` turns each row into a card with per-cell labels
+ * (styled in `app/globals.css` off the `table-stacked` class), while
+ * `variant="scroll"` keeps the table and lets it scroll sideways.
+ */
+export function Table({ className, variant = "scroll", ...props }: TableProps) {
   return (
-    <div className="w-full overflow-x-auto">
+    <div className={cn("w-full", variant === "scroll" && "overflow-x-auto")}>
       <table
-        className={cn("w-full caption-bottom text-sm", className)}
+        className={cn(
+          "w-full caption-bottom text-sm",
+          variant === "stacked" && "table-stacked",
+          className,
+        )}
         {...props}
       />
     </div>
@@ -47,6 +72,20 @@ export function TH({ className, ...props }: ComponentProps<"th">) {
   );
 }
 
-export function TD({ className, ...props }: ComponentProps<"td">) {
-  return <td className={cn("px-3 py-2 align-middle", className)} {...props} />;
+export type TDProps = ComponentProps<"td"> & {
+  /**
+   * Column name shown beside this cell in the mobile stacked-card layout
+   * (`Table variant="stacked"`). Ignored above `sm`. Sets `data-label`.
+   */
+  label?: string;
+};
+
+export function TD({ className, label, ...props }: TDProps) {
+  return (
+    <td
+      className={cn("px-3 py-2 align-middle", className)}
+      data-label={label}
+      {...props}
+    />
+  );
 }
