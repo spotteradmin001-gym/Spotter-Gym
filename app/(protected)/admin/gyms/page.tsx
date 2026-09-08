@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
-import { listGyms } from "@/db/queries";
+import { adminPromotionCounters, listGyms } from "@/db/queries";
 
 import { setGymActiveAction } from "../actions";
 import { CreateGymForm } from "./create-gym-form";
@@ -11,10 +11,27 @@ import { CreateGymForm } from "./create-gym-form";
 export const dynamic = "force-dynamic";
 
 export default async function AdminGymsPage() {
-  const gyms = await listGyms({ includeInactive: true });
+  const [gyms, promoCounters] = await Promise.all([
+    listGyms({ includeInactive: true }),
+    adminPromotionCounters(),
+  ]);
 
   return (
     <div className="flex flex-col gap-4">
+      {promoCounters.needsAdminAction > 0 && (
+        <Link
+          href="/admin/promotions"
+          className="rounded-md border border-border bg-muted-background p-3 text-sm hover:underline"
+        >
+          {promoCounters.needsAdminAction} promotion
+          {promoCounters.needsAdminAction === 1 ? "" : "s"} need your action
+          {promoCounters.refundDue > 0
+            ? ` (${promoCounters.refundDue} refund${promoCounters.refundDue === 1 ? "" : "s"} outstanding)`
+            : ""}
+          .
+        </Link>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Add a gym</CardTitle>

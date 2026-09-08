@@ -1,7 +1,13 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getGym, ownerOverview, reminderCounts } from "@/db/queries";
+import {
+  getGym,
+  ownerOverview,
+  ownerPromotionCounters,
+  reminderCounts,
+} from "@/db/queries";
 import { formatPaise } from "@/lib/money";
 import { requireOwner } from "@/src/features/auth/guards";
 
@@ -11,10 +17,11 @@ export default async function OwnerOverviewPage() {
   const user = await requireOwner();
   if (!user.gymId) notFound();
 
-  const [gym, overview, reminders] = await Promise.all([
+  const [gym, overview, reminders, promos] = await Promise.all([
     getGym(user.gymId),
     ownerOverview(user.gymId),
     reminderCounts(user.gymId),
+    ownerPromotionCounters(user.gymId),
   ]);
 
   return (
@@ -48,6 +55,34 @@ export default async function OwnerOverviewPage() {
           />
         </CardContent>
       </Card>
+
+      {(promos.inFlight > 0 || promos.refundDue > 0) && (
+        <Card>
+          <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
+            <CardTitle>Promotions</CardTitle>
+            <Link
+              href="/owner/promotions"
+              className="text-sm text-primary hover:underline"
+            >
+              View
+            </Link>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Tile label="In flight" value={String(promos.inFlight)} />
+            <Tile
+              label="Needs your action"
+              value={String(promos.needsOwnerAction)}
+              tone={promos.needsOwnerAction > 0 ? "bad" : undefined}
+            />
+            <Tile label="Sending" value={String(promos.sending)} />
+            <Tile
+              label="Refund due to you"
+              value={String(promos.refundDue)}
+              tone={promos.refundDue > 0 ? "good" : undefined}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

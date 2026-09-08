@@ -25,10 +25,12 @@ import {
   getPromotionForGym,
   listPromotionRecipients,
   listPromotionsByStatus,
+  adminPromotionCounters,
   listPromotionsCreatedBy,
   listPromotionsForGym,
   listPromotionsWithGym,
   markPromotionPaid,
+  ownerPromotionCounters,
   markPromotionRefunded,
   pricePromotion,
   promotionRecipientTally,
@@ -393,5 +395,38 @@ dbSuite("admin transitions", () => {
     const filtered = await listPromotionsWithGym(["submitted"]);
     expect(filtered.every((p) => p.status === "submitted")).toBe(true);
     expect(filtered.some((p) => p.id === id)).toBe(true);
+  });
+});
+
+dbSuite("overview counters", () => {
+  it("ownerPromotionCounters buckets by who is blocking", async () => {
+    const g = (await createGym({ name: "test_promo Counters" })).id;
+    createdGymIds.push(g);
+
+    async function submittedIn(): Promise<string> {
+      const p = await createPromotionDraft({ gymId: g, body: "x" });
+      await replacePromotionRecipients(p.id, [
+        { phone: "+919700000040", source: "contact" },
+      ]);
+      await submitPromotion({ gymId: g, promotionId: p.id });
+      return p.id;
+    }
+
+    const a = await submittedIn(); // stays submitted → withAdmin
+    const b = await submittedIn();
+    await pricePromotion({ promotionId: b, perMessagePaise: 10 }); // priced → needsOwnerAction
+
+    const counters = await ownerPromotionCounters(g);
+    expect(counters.inFlight).toBe(2);
+    expect(counters.withAdmin).toBe(1);
+    expect(counters.needsOwnerAction).toBe(1);
+    expect(counters.sending).toBe(0);
+    expect(counters.refundDue).toBe(0);
+    void a;
+
+    // a global counter includes our submitted one
+    const admin = await adminPromotionCounters();
+    expect(admin.submitted).toBeGreaterThanOrEqual(1);
+    expect(admin.needsAdminAction).toBeGreaterThanOrEqual(1);
   });
 });

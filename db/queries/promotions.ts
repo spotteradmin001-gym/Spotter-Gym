@@ -665,3 +665,112 @@ export async function listPromotionsWithGym(
     gymSlug: r.gymSlug,
   }));
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Overview counters (Batch F.7)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type OwnerPromotionCounters = {
+  /** Anything not yet in a terminal state. */
+  inFlight: number;
+  /** Waiting on the platform admin (submitted, or sending). */
+  withAdmin: number;
+  /** Waiting on the owner (priced → approve, or approved-not-prepaid). */
+  needsOwnerAction: number;
+  /** Currently being delivered by the engine. */
+  sending: number;
+  /** Finished sends with a refund the admin still owes. */
+  refundDue: number;
+};
+
+/** In-flight promotion counters for the `/owner` overview. */
+export async function ownerPromotionCounters(
+  gymId: string,
+): Promise<OwnerPromotionCounters> {
+  const rows = await db
+    .select({
+      status: promotions.status,
+      settlement: promotions.settlement,
+      prepaidPaise: promotions.prepaidPaise,
+    })
+    .from(promotions)
+    .where(eq(promotions.gymId, gymId));
+
+  const c: OwnerPromotionCounters = {
+    inFlight: 0,
+    withAdmin: 0,
+    needsOwnerAction: 0,
+    sending: 0,
+    refundDue: 0,
+  };
+  const IN_FLIGHT = new Set([
+    "draft",
+    "submitted",
+    "priced",
+    "approved",
+    "paid",
+    "sending",
+  ]);
+  for (const r of rows) {
+    if (IN_FLIGHT.has(r.status)) c.inFlight++;
+    if (r.status === "submitted" || r.status === "sending") c.withAdmin++;
+    if (r.status === "sending") c.sending++;
+    if (
+      r.status === "priced" ||
+      (r.status === "approved" && r.prepaidPaise == null)
+    ) {
+      c.needsOwnerAction++;
+    }
+    if (r.settlement === "refund_due") c.refundDue++;
+  }
+  return c;
+}
+
+export type AdminPromotionCounters = {
+  submitted: number;
+  priced: number;
+  approved: number;
+  paid: number;
+  sending: number;
+  refundDue: number;
+  /** submitted + paid — the two states where the admin is the blocker. */
+  needsAdminAction: number;
+};
+
+/** In-flight promotion counters across every gym for the `/admin` overview. */
+export async function adminPromotionCounters(): Promise<AdminPromotionCounters> {
+  const rows = await db
+    .select({
+      status: promotions.status,
+      settlement: promotions.settlement,
+      prepaidPaise: promotions.prepaidPaise,
+    })
+    .from(promotions);
+
+  const c: AdminPromotionCounters = {
+    submitted: 0,
+    priced: 0,
+    approved: 0,
+    paid: 0,
+    sending: 0,
+    refundDue: 0,
+    needsAdminAction: 0,
+  };
+  for (const r of rows) {
+    if (r.status === "submitted") c.submitted++;
+    else if (r.status === "priced") c.priced++;
+    else if (r.status === "approved") c.approved++;
+    else if (r.status === "paid") c.paid++;
+    else if (r.status === "sending") c.sending++;
+    if (r.settlement === "refund_due") c.refundDue++;
+    if (
+      r.status === "submitted" ||
+      r.status === "paid" ||
+      (r.status === "approved" && r.prepaidPaise != null) ||
+      r.settlement === "refund_due"
+    ) {
+      c.needsAdminAction++;
+    }
+  }
+  return c;
+}
