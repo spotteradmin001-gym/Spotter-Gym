@@ -125,13 +125,20 @@ body {
 
   table.table-stacked td {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
+    gap: 0.25rem 1rem;
     padding: 0.5rem 0;
     text-align: right;
     white-space: normal;
     min-height: 2.5rem;
+  }
+
+  /* A rich cell (embedded control widget, multi-line block) drops below its
+     label and left-aligns instead of trying to sit in the value column. */
+  table.table-stacked td > *:not(:only-child) {
+    text-align: left;
   }
 
   table.table-stacked td:not(:last-child) {

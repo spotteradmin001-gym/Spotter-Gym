@@ -15,7 +15,7 @@ export default async function AdminAuditPage() {
         <CardTitle>Audit log</CardTitle>
       </CardHeader>
       <CardContent className="p-0">
-        <Table>
+        <Table variant="stacked">
           <THead>
             <TR>
               <TH>When</TH>
@@ -27,17 +27,17 @@ export default async function AdminAuditPage() {
           <TBody>
             {entries.map((e) => (
               <TR key={e.id}>
-                <TD className="whitespace-nowrap">
+                <TD label="When" className="whitespace-nowrap">
                   {new Date(e.createdAt).toLocaleString()}
                 </TD>
-                <TD>
+                <TD label="Actor">
                   {e.actorEmail ?? "—"}
                   {e.actorRole && (
                     <span className="ml-1 text-xs text-muted">{e.actorRole}</span>
                   )}
                 </TD>
-                <TD className="font-mono text-xs">{e.action}</TD>
-                <TD className="font-mono text-xs text-muted">
+                <TD label="Action" className="font-mono text-xs">{e.action}</TD>
+                <TD label="Target" className="font-mono text-xs text-muted">
                   {e.targetType}
                   {e.targetId ? `:${e.targetId.slice(0, 8)}` : ""}
                 </TD>
