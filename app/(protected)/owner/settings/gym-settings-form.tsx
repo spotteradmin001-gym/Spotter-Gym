@@ -12,6 +12,7 @@ import { paiseToRupees } from "@/lib/money";
 import type { ActionState } from "@/lib/result";
 
 import { saveGymSettingsAction } from "./actions";
+import { UseLocationButton } from "./use-location-button";
 
 function SaveButton() {
   const { pending } = useFormStatus();
@@ -46,6 +47,7 @@ export function GymSettingsForm({ gym }: { gym: Gym }) {
       <FormField htmlFor="s-lng" label="Check-in longitude">
         <Input id="s-lng" name="geoLng" type="number" step="any" defaultValue={gym.geoLng ?? ""} />
       </FormField>
+      <UseLocationButton latInputId="s-lat" lngInputId="s-lng" />
       <FormField htmlFor="s-radius" label="Check-in radius (m)">
         <Input
           id="s-radius"
