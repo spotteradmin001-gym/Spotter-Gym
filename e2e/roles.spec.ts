@@ -64,3 +64,20 @@ test("the admin audit log stays admin-only (CR-4)", async ({ page }) => {
   await page.goto("/admin/audit");
   await expect(page.getByRole("heading", { name: "Audit log" })).toBeVisible();
 });
+
+test("the owner staff-activity view is owner-only (CR-5)", async ({ page }) => {
+  // A member cannot reach it — every non-owner role hits the same requireOwner
+  // guard and is bounced to login (employees included).
+  await login(page, "member@demo.spotter", "DemoMember#2026");
+  await page.goto("/owner/staff-activity");
+  await expect(page).toHaveURL(/\/login/);
+
+  // The owner can, and the nav offers it.
+  await login(page, "owner@demo.spotter", "DemoOwner#2026");
+  await expect(page).toHaveURL(/\/owner$/);
+  await expect(page.getByRole("link", { name: "Staff activity" })).toBeVisible();
+  await page.goto("/owner/staff-activity");
+  await expect(
+    page.getByRole("heading", { name: /Staff activity/ }),
+  ).toBeVisible();
+});

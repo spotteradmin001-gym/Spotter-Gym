@@ -3,7 +3,7 @@
  * branch. Skipped when DATABASE_URL is unset. FIND-MY-FIXTURE: gym name
  * `test_exp %`.
  */
-import { eq, like } from "drizzle-orm";
+import { eq, inArray, like } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const dbSuite = process.env.DATABASE_URL ? describe : describe.skip;
@@ -32,8 +32,29 @@ let gymId = "";
 let staffId = "";
 const AS_OF = new Date("2026-09-10T00:00:00Z");
 
+/**
+ * Removes every `test_exp %` fixture, not just this run's — so a run that was
+ * killed before its afterAll (leaving orphan rows that block the gym delete via
+ * the RESTRICT FK on expenses) can't wedge the next run on the shared branch.
+ */
+async function purgeExpenseFixtures(): Promise<void> {
+  const stale = await db
+    .select({ id: gyms.id })
+    .from(gyms)
+    .where(like(gyms.name, "test_exp %"));
+  const ids = stale.map((r) => r.id);
+  if (ids.length) {
+    await db.delete(expenses).where(inArray(expenses.gymId, ids));
+    await db.delete(recurringExpenses).where(inArray(recurringExpenses.gymId, ids));
+    await db.delete(expenseCategories).where(inArray(expenseCategories.gymId, ids));
+  }
+  await db.delete(users).where(like(users.email, "test_exp_%"));
+  if (ids.length) await db.delete(gyms).where(inArray(gyms.id, ids));
+}
+
 if (process.env.DATABASE_URL) {
   beforeAll(async () => {
+    await purgeExpenseFixtures();
     gymId = (await createGym({ name: "test_exp Gym" })).id;
     const [u] = await db
       .insert(users)
@@ -48,11 +69,7 @@ if (process.env.DATABASE_URL) {
     staffId = u!.id;
   });
   afterAll(async () => {
-    await db.delete(expenses).where(eq(expenses.gymId, gymId));
-    await db.delete(recurringExpenses).where(eq(recurringExpenses.gymId, gymId));
-    await db.delete(expenseCategories).where(eq(expenseCategories.gymId, gymId));
-    await db.delete(users).where(like(users.email, "test_exp_%"));
-    await db.delete(gyms).where(like(gyms.name, "test_exp %"));
+    await purgeExpenseFixtures();
     await closeDb();
   });
 }
