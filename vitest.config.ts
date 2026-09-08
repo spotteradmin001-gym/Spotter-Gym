@@ -40,6 +40,7 @@ export default defineConfig({
       "app/**/*.test.ts",
       "app/**/*.test.tsx",
       "test/**/*.test.ts",
+      "engine/**/*.test.mjs",
     ],
   },
 });
