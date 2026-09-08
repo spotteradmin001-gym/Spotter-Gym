@@ -1,17 +1,37 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getGym, listRecentCheckins, memberStreak } from "@/db/queries";
+import { closedDates, getGym, listRecentCheckins, memberStreak } from "@/db/queries";
 import { formatPaise } from "@/lib/money";
+import { addDays, longestStreak } from "@/lib/streak";
+import { buildMonthGrid } from "@/lib/streak-calendar";
 import { requireCompleteProfile } from "@/src/features/auth/member-scope";
+
+import { StreakCalendar } from "./streak-calendar";
 
 export const dynamic = "force-dynamic";
 
 export default async function MemberHomePage() {
   const { member } = await requireCompleteProfile();
+  const today = new Date().toISOString().slice(0, 10);
+  const month = today.slice(0, 7);
+
   const [gym, streak, recent] = await Promise.all([
     getGym(member.gymId),
     memberStreak(member.gymId, member.id),
-    listRecentCheckins(member.gymId, member.id, 10),
+    listRecentCheckins(member.gymId, member.id, 400),
   ]);
+
+  const checkinDates = recent.map((c) => c.date);
+  const earliest = checkinDates.length
+    ? checkinDates.reduce((a, b) => (a < b ? a : b))
+    : today;
+  // Wide enough to cover the grid's leading / trailing padding and the whole
+  // check-in history the longest-streak calc walks.
+  const from = earliest < `${month}-01` ? earliest : `${month}-01`;
+  const to = addDays(`${month}-01`, 45);
+  const closed = await closedDates(member.gymId, from, to);
+
+  const grid = buildMonthGrid({ month, today, checkins: checkinDates, closed });
+  const best = longestStreak({ checkins: checkinDates, closed, today });
 
   return (
     <div className="flex flex-col gap-4">
@@ -27,21 +47,28 @@ export default async function MemberHomePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Streak: {streak} day{streak === 1 ? "" : "s"}</CardTitle>
+          <CardTitle>Your streak</CardTitle>
         </CardHeader>
-        <CardContent className="text-sm">
-          {recent.length === 0 ? (
-            <p className="text-muted">
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex gap-6">
+            <div>
+              <p className="text-2xl font-semibold">{streak}</p>
+              <p className="text-xs text-muted">
+                current day{streak === 1 ? "" : "s"}
+              </p>
+            </div>
+            <div>
+              <p className="text-2xl font-semibold">{best}</p>
+              <p className="text-xs text-muted">
+                longest day{best === 1 ? "" : "s"}
+              </p>
+            </div>
+          </div>
+          <StreakCalendar grid={grid} />
+          {recent.length === 0 && (
+            <p className="text-sm text-muted">
               Scan the QR at the gym entrance to check in.
             </p>
-          ) : (
-            <ul className="flex flex-col gap-1">
-              {recent.map((c) => (
-                <li key={c.date} className="text-muted">
-                  {c.date}
-                </li>
-              ))}
-            </ul>
           )}
         </CardContent>
       </Card>
