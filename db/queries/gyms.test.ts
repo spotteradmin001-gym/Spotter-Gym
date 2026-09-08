@@ -45,6 +45,20 @@ dbSuite("createGym", () => {
     expect(b.slug).toBe("test-gym-iron-2");
   });
 
+  it("defaults the WAHA session name to the slug when blank", async () => {
+    const gym = await createGym({ name: "test_gym Sessionless" });
+    expect(gym.wahaSessionName).toBe("test-gym-sessionless");
+    expect(gym.wahaSessionName).toBe(gym.slug);
+  });
+
+  it("keeps an explicit WAHA session name", async () => {
+    const gym = await createGym({
+      name: "test_gym Named Session",
+      wahaSessionName: "  gym-alpha  ",
+    });
+    expect(gym.wahaSessionName).toBe("gym-alpha");
+  });
+
   it("rejects a blank name and a bad timezone", async () => {
     await expect(createGym({ name: " " })).rejects.toBeInstanceOf(GymError);
     await expect(
@@ -89,6 +103,7 @@ dbSuite("updateGym", () => {
     expect(updated.checkinRadiusM).toBe(150);
     expect(updated.defaultMonthlyFeePaise).toBe(150000);
     expect(updated.reminderDaysBefore).toBe(5);
+    expect(updated.wahaSessionName).toBe("test_gym_update");
 
     await expect(
       updateGym(gym.id, { checkinRadiusM: 5 }),

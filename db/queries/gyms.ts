@@ -81,6 +81,11 @@ const TZ_RE = /^[A-Za-z]+\/[A-Za-z0-9_+-]+$/;
 export async function createGym(input: {
   name: string;
   timezone?: string;
+  /**
+   * The WAHA session this gym's reminders send from. Admin-owned. Left blank,
+   * it defaults to the gym slug.
+   */
+  wahaSessionName?: string;
 }): Promise<Gym> {
   const name = input.name.trim();
   if (name.length < 2) {
@@ -91,9 +96,12 @@ export async function createGym(input: {
     throw new GymError("Enter a valid IANA timezone, e.g. Asia/Kolkata.");
   }
 
+  const slug = await uniqueSlug(slugify(name));
+  const wahaSessionName = input.wahaSessionName?.trim() || slug;
+
   const [row] = await db
     .insert(gyms)
-    .values({ name, slug: await uniqueSlug(slugify(name)), timezone })
+    .values({ name, slug, timezone, wahaSessionName })
     .returning();
   return mapGym(row!);
 }

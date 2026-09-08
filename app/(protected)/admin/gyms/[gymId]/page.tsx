@@ -8,6 +8,7 @@ import { countGymUsersByRole, getGym, listGymUsers } from "@/db/queries";
 
 import { setGymActiveAction, setUserActiveAction } from "../../actions";
 import { CreateOwnerForm } from "./create-owner-form";
+import { WahaSessionForm } from "./waha-session-form";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,19 @@ export default async function AdminGymDetailPage({
           <Stat label="Employees" value={String(counts.employees)} />
           <Stat label="Members" value={String(counts.members)} />
           <Stat label="Slug" value={gym.slug} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Reminders</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <WahaSessionForm
+            gymId={gym.id}
+            wahaSessionName={gym.wahaSessionName}
+            slug={gym.slug}
+          />
         </CardContent>
       </Card>
 

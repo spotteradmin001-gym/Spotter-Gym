@@ -48,8 +48,7 @@ export async function saveGymSettingsAction(
     checkinRadiusM: numOrUndef(formData.get("checkinRadiusM")),
     reminderDaysBefore: numOrUndef(formData.get("reminderDaysBefore")),
     billingAnchorDay: numOrUndef(formData.get("billingAnchorDay")),
-    wahaSessionName:
-      (String(formData.get("wahaSessionName") ?? "").trim() || null) as string | null,
+    // wahaSessionName is admin-owned (CR-1) — the owner form no longer sends it.
     defaultMonthlyFeePaise:
       feeRupees === undefined ? null : rupeesToPaise(feeRupees),
   };

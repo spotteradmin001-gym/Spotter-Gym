@@ -7,8 +7,10 @@ import {
   GymError,
   createGym,
   createOwnerForGym,
+  getGym,
   setGymActive,
   setUserActive,
+  updateGym,
   writeAudit,
 } from "@/db/queries";
 import { err, ok, type ActionState } from "@/lib/result";
@@ -26,9 +28,14 @@ export async function createGymAction(
   const admin = await requireUserForAction("admin");
   const name = String(formData.get("name") ?? "");
   const timezone = String(formData.get("timezone") ?? "");
+  const wahaSessionName = String(formData.get("wahaSessionName") ?? "");
 
   try {
-    const gym = await createGym({ name, timezone: timezone || undefined });
+    const gym = await createGym({
+      name,
+      timezone: timezone || undefined,
+      wahaSessionName: wahaSessionName || undefined,
+    });
     await writeAudit({
       actorUserId: admin.id,
       actorRole: "admin",
@@ -36,9 +43,39 @@ export async function createGymAction(
       action: "gym.create",
       targetType: "gym",
       targetId: gym.id,
-      meta: { name: gym.name },
+      meta: { name: gym.name, wahaSessionName: gym.wahaSessionName },
     });
     revalidatePath("/admin/gyms");
+    return ok();
+  } catch (error) {
+    return err(toMessage(error));
+  }
+}
+
+export async function updateGymWahaSessionAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const admin = await requireUserForAction("admin");
+  const gymId = String(formData.get("gymId") ?? "");
+  const raw = String(formData.get("wahaSessionName") ?? "").trim();
+
+  try {
+    const gym = await getGym(gymId);
+    if (!gym) throw new GymError("That gym no longer exists.");
+    // Admin-owned and never blank — an empty box falls back to the gym slug.
+    const wahaSessionName = raw || gym.slug;
+    await updateGym(gymId, { wahaSessionName });
+    await writeAudit({
+      actorUserId: admin.id,
+      actorRole: "admin",
+      gymId,
+      action: "gym.waha_session",
+      targetType: "gym",
+      targetId: gymId,
+      meta: { wahaSessionName },
+    });
+    revalidatePath(`/admin/gyms/${gymId}`);
     return ok();
   } catch (error) {
     return err(toMessage(error));
