@@ -3,7 +3,8 @@ import "server-only";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/db/client";
-import { promotionRecipients, promotions } from "@/db/schema";
+import { gyms, promotionRecipients, promotions } from "@/db/schema";
+import { estimate, partsPerRecipient } from "@/lib/promo-cost";
 
 /** Caller-facing failures; the server-action layer maps this to user copy. */
 export class PromotionError extends Error {
@@ -472,4 +473,195 @@ export async function promotionRecipientTally(
     else if (r.imageStatus === "pending") t.imagePending++;
   }
   return t;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin transitions (Batch F.5). Not gym-scoped — the platform admin works
+// across every gym. Role is enforced at the action layer.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function loadPromotionOrThrow(id: string): Promise<Promotion> {
+  const promo = await getPromotion(id);
+  if (!promo) throw new PromotionError("That promotion no longer exists.");
+  return promo;
+}
+
+/**
+ * Admin prices a submitted promotion. `perMessagePaise` is the charge for one
+ * delivered part; the estimate is `perMessagePaise × parts × recipients`
+ * (`lib/promo-cost`). submitted → priced.
+ */
+export async function pricePromotion(input: {
+  promotionId: string;
+  perMessagePaise: number;
+}): Promise<Promotion> {
+  const promo = await loadPromotionOrThrow(input.promotionId);
+  if (promo.status !== "submitted") {
+    throw new PromotionError("Only a submitted promotion can be priced.");
+  }
+  const quote = estimate({
+    perMessagePaise: input.perMessagePaise,
+    parts: { hasText: promo.hasText, hasImage: promo.hasImage },
+    recipientCount: promo.recipientCount,
+  });
+  const [row] = await db
+    .update(promotions)
+    .set({
+      status: "priced",
+      perMessagePaise: input.perMessagePaise,
+      estimatedTotalPaise: quote.estimatedTotalPaise,
+      pricedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(promotions.id, input.promotionId),
+        eq(promotions.status, "submitted"),
+      ),
+    )
+    .returning();
+  if (!row) throw new PromotionError("Only a submitted promotion can be priced.");
+  return mapPromotion(row);
+}
+
+const REJECTABLE_STATUSES: PromotionStatus[] = [
+  "submitted",
+  "priced",
+  "approved",
+];
+
+/** Admin rejects a promotion before it is paid. */
+export async function rejectPromotion(input: {
+  promotionId: string;
+  adminNote?: string | null;
+}): Promise<Promotion> {
+  const promo = await loadPromotionOrThrow(input.promotionId);
+  if (!REJECTABLE_STATUSES.includes(promo.status)) {
+    throw new PromotionError("This promotion can no longer be rejected.");
+  }
+  const [row] = await db
+    .update(promotions)
+    .set({
+      status: "rejected",
+      adminNote: input.adminNote?.trim() || promo.adminNote,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(promotions.id, input.promotionId),
+        inArray(promotions.status, REJECTABLE_STATUSES),
+      ),
+    )
+    .returning();
+  if (!row) throw new PromotionError("This promotion can no longer be rejected.");
+  return mapPromotion(row);
+}
+
+/**
+ * Admin confirms the owner's offline prepayment has landed. approved → paid.
+ * Requires the owner to have acknowledged prepaying (prepaid_paise set).
+ */
+export async function markPromotionPaid(input: {
+  promotionId: string;
+}): Promise<Promotion> {
+  const promo = await loadPromotionOrThrow(input.promotionId);
+  if (promo.status !== "approved") {
+    throw new PromotionError("The owner has not approved the estimate yet.");
+  }
+  if (promo.prepaidPaise == null) {
+    throw new PromotionError(
+      "The owner has not marked the estimate as prepaid yet.",
+    );
+  }
+  const [row] = await db
+    .update(promotions)
+    .set({ status: "paid", paidAt: new Date(), updatedAt: new Date() })
+    .where(
+      and(eq(promotions.id, input.promotionId), eq(promotions.status, "approved")),
+    )
+    .returning();
+  if (!row) throw new PromotionError("The owner has not approved the estimate yet.");
+  return mapPromotion(row);
+}
+
+/**
+ * Admin releases a paid promotion to the engine. paid → sending. The engine
+ * (Batch F.6) then works through `promotion_recipients` day by day.
+ */
+export async function startPromotionSending(input: {
+  promotionId: string;
+}): Promise<Promotion> {
+  const promo = await loadPromotionOrThrow(input.promotionId);
+  if (promo.status !== "paid") {
+    throw new PromotionError("A promotion can only be sent once it is paid.");
+  }
+  const [row] = await db
+    .update(promotions)
+    .set({ status: "sending", updatedAt: new Date() })
+    .where(
+      and(eq(promotions.id, input.promotionId), eq(promotions.status, "paid")),
+    )
+    .returning();
+  if (!row) throw new PromotionError("A promotion can only be sent once it is paid.");
+  return mapPromotion(row);
+}
+
+/**
+ * Admin marks the offline overpayment refund as done. The reconcile step
+ * (Batch F.6) sets `settlement` to `refund_due`; this closes it to `refunded`.
+ */
+export async function markPromotionRefunded(input: {
+  promotionId: string;
+}): Promise<Promotion> {
+  const promo = await loadPromotionOrThrow(input.promotionId);
+  if (promo.settlement !== "refund_due") {
+    throw new PromotionError("This promotion has no refund outstanding.");
+  }
+  const [row] = await db
+    .update(promotions)
+    .set({
+      settlement: "refunded",
+      reconciledAt: promo.reconciledAt ? undefined : new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(promotions.id, input.promotionId),
+        eq(promotions.settlement, "refund_due"),
+      ),
+    )
+    .returning();
+  if (!row) throw new PromotionError("This promotion has no refund outstanding.");
+  return mapPromotion(row);
+}
+
+export { partsPerRecipient };
+
+export type PromotionWithGym = Promotion & {
+  gymName: string;
+  gymSlug: string;
+};
+
+/**
+ * Every promotion (optionally filtered by status) with its gym name — the
+ * admin queue. Ordered newest first.
+ */
+export async function listPromotionsWithGym(
+  statuses?: PromotionStatus[],
+): Promise<PromotionWithGym[]> {
+  const rows = await db
+    .select({ promotion: promotions, gymName: gyms.name, gymSlug: gyms.slug })
+    .from(promotions)
+    .innerJoin(gyms, eq(gyms.id, promotions.gymId))
+    .where(
+      statuses && statuses.length > 0
+        ? inArray(promotions.status, statuses)
+        : undefined,
+    )
+    .orderBy(desc(promotions.createdAt));
+  return rows.map((r) => ({
+    ...mapPromotion(r.promotion),
+    gymName: r.gymName,
+    gymSlug: r.gymSlug,
+  }));
 }

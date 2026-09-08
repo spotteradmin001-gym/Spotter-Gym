@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 
 const NAV: NavItem[] = [
   { href: "/admin/gyms", label: "Gyms" },
+  { href: "/admin/promotions", label: "Promotions" },
   { href: "/admin/audit", label: "Audit" },
 ];
 
