@@ -278,3 +278,198 @@ export async function listPromotionRecipients(
     .orderBy(asc(promotionRecipients.createdAt));
   return rows.map(mapRecipient);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// State transitions — owner + employee side. Admin transitions (price, reject,
+// mark paid, send, refund) land in Batch F.5.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function loadForTransition(
+  gymId: string,
+  promotionId: string,
+): Promise<Promotion> {
+  const promo = await getPromotionForGym(gymId, promotionId);
+  if (!promo) throw new PromotionError("That promotion no longer exists.");
+  return promo;
+}
+
+/**
+ * Draft → submitted. Requires content and at least one recipient. Called by the
+ * owner action directly and, for an approval-gated employee, by
+ * `decidePermissionRequest` once the owner approves.
+ */
+export async function submitPromotion(input: {
+  gymId: string;
+  promotionId: string;
+}): Promise<Promotion> {
+  const promo = await loadForTransition(input.gymId, input.promotionId);
+  if (promo.status !== "draft") {
+    throw new PromotionError("This promotion has already been submitted.");
+  }
+  if (!promo.hasText && !promo.hasImage) {
+    throw new PromotionError("Add a message or an image before submitting.");
+  }
+  if (promo.recipientCount < 1) {
+    throw new PromotionError("Add at least one recipient before submitting.");
+  }
+  const [row] = await db
+    .update(promotions)
+    .set({ status: "submitted", submittedAt: new Date(), updatedAt: new Date() })
+    .where(
+      and(eq(promotions.id, input.promotionId), eq(promotions.status, "draft")),
+    )
+    .returning();
+  if (!row) throw new PromotionError("This promotion has already been submitted.");
+  return mapPromotion(row);
+}
+
+/**
+ * Owner approves the admin's estimate: priced → approved. Owner-only — the
+ * money steps are never reachable by an employee (enforced at the action layer).
+ */
+export async function approvePromotionEstimate(input: {
+  gymId: string;
+  promotionId: string;
+}): Promise<Promotion> {
+  const promo = await loadForTransition(input.gymId, input.promotionId);
+  if (promo.status !== "priced") {
+    throw new PromotionError(
+      "This promotion is not waiting for estimate approval.",
+    );
+  }
+  const [row] = await db
+    .update(promotions)
+    .set({ status: "approved", approvedAt: new Date(), updatedAt: new Date() })
+    .where(
+      and(eq(promotions.id, input.promotionId), eq(promotions.status, "priced")),
+    )
+    .returning();
+  if (!row) {
+    throw new PromotionError(
+      "This promotion is not waiting for estimate approval.",
+    );
+  }
+  return mapPromotion(row);
+}
+
+/**
+ * Owner records that they have prepaid the estimate offline. The promotion
+ * stays `approved` — the admin flips it to `paid` once the money lands —
+ * but `prepaid_paise` is set to the estimate so the admin sees the
+ * acknowledged amount.
+ */
+export async function acknowledgePromotionPrepaid(input: {
+  gymId: string;
+  promotionId: string;
+}): Promise<Promotion> {
+  const promo = await loadForTransition(input.gymId, input.promotionId);
+  if (promo.status !== "approved") {
+    throw new PromotionError("Approve the estimate before marking it prepaid.");
+  }
+  if (promo.estimatedTotalPaise == null) {
+    throw new PromotionError("This promotion has no estimate yet.");
+  }
+  const [row] = await db
+    .update(promotions)
+    .set({ prepaidPaise: promo.estimatedTotalPaise, updatedAt: new Date() })
+    .where(eq(promotions.id, input.promotionId))
+    .returning();
+  return mapPromotion(row!);
+}
+
+const CANCELLABLE_STATUSES: PromotionStatus[] = [
+  "draft",
+  "submitted",
+  "priced",
+  "approved",
+];
+
+/** Owner (or the creating employee) withdraws a promotion before it is paid. */
+export async function cancelPromotion(input: {
+  gymId: string;
+  promotionId: string;
+}): Promise<Promotion> {
+  const promo = await loadForTransition(input.gymId, input.promotionId);
+  if (!CANCELLABLE_STATUSES.includes(promo.status)) {
+    throw new PromotionError("This promotion can no longer be cancelled.");
+  }
+  const [row] = await db
+    .update(promotions)
+    .set({ status: "cancelled", updatedAt: new Date() })
+    .where(
+      and(
+        eq(promotions.id, input.promotionId),
+        inArray(promotions.status, CANCELLABLE_STATUSES),
+      ),
+    )
+    .returning();
+  if (!row) throw new PromotionError("This promotion can no longer be cancelled.");
+  return mapPromotion(row);
+}
+
+/** Promotions one user composed — the employee portal's own list. */
+export async function listPromotionsCreatedBy(
+  gymId: string,
+  userId: string,
+): Promise<Promotion[]> {
+  const rows = await db
+    .select()
+    .from(promotions)
+    .where(
+      and(
+        eq(promotions.gymId, gymId),
+        eq(promotions.createdByUserId, userId),
+      ),
+    )
+    .orderBy(desc(promotions.createdAt));
+  return rows.map(mapPromotion);
+}
+
+export type PromotionRecipientTally = {
+  total: number;
+  textSent: number;
+  textFailed: number;
+  textSkipped: number;
+  textPending: number;
+  imageSent: number;
+  imageFailed: number;
+  imageSkipped: number;
+  imagePending: number;
+  /** Parts across all recipients with status 'sent' — the billed-part count. */
+  deliveredParts: number;
+};
+
+/** Per-part counts for one promotion — feeds the status view and reconcile maths. */
+export async function promotionRecipientTally(
+  promotionId: string,
+): Promise<PromotionRecipientTally> {
+  const recips = await listPromotionRecipients(promotionId);
+  const t: PromotionRecipientTally = {
+    total: recips.length,
+    textSent: 0,
+    textFailed: 0,
+    textSkipped: 0,
+    textPending: 0,
+    imageSent: 0,
+    imageFailed: 0,
+    imageSkipped: 0,
+    imagePending: 0,
+    deliveredParts: 0,
+  };
+  for (const r of recips) {
+    if (r.textStatus === "sent") {
+      t.textSent++;
+      t.deliveredParts++;
+    } else if (r.textStatus === "failed") t.textFailed++;
+    else if (r.textStatus === "skipped") t.textSkipped++;
+    else if (r.textStatus === "pending") t.textPending++;
+
+    if (r.imageStatus === "sent") {
+      t.imageSent++;
+      t.deliveredParts++;
+    } else if (r.imageStatus === "failed") t.imageFailed++;
+    else if (r.imageStatus === "skipped") t.imageSkipped++;
+    else if (r.imageStatus === "pending") t.imagePending++;
+  }
+  return t;
+}

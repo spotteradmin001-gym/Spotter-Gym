@@ -15,6 +15,7 @@ const ACTION_LABEL: Record<string, string> = {
   "payment.record": "Record payment",
   "expense.create": "Add expense",
   "expense.edit": "Edit expense",
+  "promotion.create": "Send promotion to admin review",
 };
 
 export default async function OwnerApprovalsPage() {

@@ -9,6 +9,7 @@ export const EMPLOYEE_PERMISSIONS = [
   "payment.record",
   "expense.create",
   "expense.edit",
+  "promotion.create",
 ] as const;
 
 export type Permission = (typeof EMPLOYEE_PERMISSIONS)[number];
@@ -19,4 +20,5 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "payment.record": "Record payments",
   "expense.create": "Add expenses",
   "expense.edit": "Edit expenses",
+  "promotion.create": "Create promotions",
 };

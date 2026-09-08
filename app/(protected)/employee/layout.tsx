@@ -10,6 +10,7 @@ const NAV: { href: string; label: string; needs: Permission[] }[] = [
   { href: "/employee/members", label: "Members", needs: ["member.create", "member.edit"] },
   { href: "/employee/payments", label: "Payments", needs: ["payment.record"] },
   { href: "/employee/expenses", label: "Expenses", needs: ["expense.create", "expense.edit"] },
+  { href: "/employee/promotions", label: "Promotions", needs: ["promotion.create"] },
 ];
 
 export default async function EmployeeLayout({

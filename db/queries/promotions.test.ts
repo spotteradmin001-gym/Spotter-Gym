@@ -17,13 +17,19 @@ import { createGym } from "./gyms";
 import { createMember } from "./members";
 import {
   PromotionError,
+  acknowledgePromotionPrepaid,
+  approvePromotionEstimate,
+  cancelPromotion,
   createPromotionDraft,
   getPromotion,
   getPromotionForGym,
   listPromotionRecipients,
   listPromotionsByStatus,
+  listPromotionsCreatedBy,
   listPromotionsForGym,
+  promotionRecipientTally,
   replacePromotionRecipients,
+  submitPromotion,
 } from "./promotions";
 
 let gymId = "";
@@ -181,5 +187,110 @@ dbSuite("replacePromotionRecipients", () => {
     await expect(
       replacePromotionRecipients("00000000-0000-0000-0000-000000000000", []),
     ).rejects.toBeInstanceOf(PromotionError);
+  });
+});
+
+dbSuite("state transitions", () => {
+  async function draftWithRecipient() {
+    const p = await createPromotionDraft({ gymId, body: "transition test" });
+    await replacePromotionRecipients(p.id, [
+      { phone: "+919700000010", source: "contact" },
+    ]);
+    return p.id;
+  }
+
+  it("submitPromotion needs content + a recipient and only fires once", async () => {
+    const empty = await createPromotionDraft({ gymId, body: "no recipients" });
+    await expect(
+      submitPromotion({ gymId, promotionId: empty.id }),
+    ).rejects.toThrow(/recipient/i);
+
+    const id = await draftWithRecipient();
+    const submitted = await submitPromotion({ gymId, promotionId: id });
+    expect(submitted.status).toBe("submitted");
+    expect(submitted.submittedAt).not.toBeNull();
+
+    await expect(
+      submitPromotion({ gymId, promotionId: id }),
+    ).rejects.toThrow(/already been submitted/);
+
+    // wrong gym cannot see it
+    await expect(
+      submitPromotion({ gymId: otherGymId, promotionId: id }),
+    ).rejects.toThrow(/no longer exists/);
+  });
+
+  it("approvePromotionEstimate only works from priced, then prepaid ack sets the amount", async () => {
+    const id = await draftWithRecipient();
+    await submitPromotion({ gymId, promotionId: id });
+
+    // not priced yet
+    await expect(
+      approvePromotionEstimate({ gymId, promotionId: id }),
+    ).rejects.toThrow(/not waiting/i);
+
+    // admin pricing (F.5) simulated directly
+    await db
+      .update(promotions)
+      .set({
+        status: "priced",
+        perMessagePaise: 50,
+        estimatedTotalPaise: 50,
+        pricedAt: new Date(),
+      })
+      .where(eq(promotions.id, id));
+
+    const approved = await approvePromotionEstimate({ gymId, promotionId: id });
+    expect(approved.status).toBe("approved");
+
+    const acked = await acknowledgePromotionPrepaid({ gymId, promotionId: id });
+    expect(acked.status).toBe("approved");
+    expect(acked.prepaidPaise).toBe(50);
+
+    // a second approve is now rejected
+    await expect(
+      approvePromotionEstimate({ gymId, promotionId: id }),
+    ).rejects.toThrow(/not waiting/i);
+  });
+
+  it("cancelPromotion works pre-payment and is blocked once paid", async () => {
+    const id = await draftWithRecipient();
+    const cancelled = await cancelPromotion({ gymId, promotionId: id });
+    expect(cancelled.status).toBe("cancelled");
+
+    const id2 = await draftWithRecipient();
+    await db
+      .update(promotions)
+      .set({ status: "paid", paidAt: new Date() })
+      .where(eq(promotions.id, id2));
+    await expect(
+      cancelPromotion({ gymId, promotionId: id2 }),
+    ).rejects.toThrow(/no longer be cancelled/);
+  });
+
+  it("listPromotionsCreatedBy and promotionRecipientTally", async () => {
+    const p = await createPromotionDraft({
+      gymId,
+      createdByUserId: null,
+      body: "tally",
+    });
+    await replacePromotionRecipients(p.id, [
+      { phone: "+919700000021", source: "contact" },
+      { phone: "+919700000022", source: "contact" },
+    ]);
+    await db
+      .update(promotionRecipients)
+      .set({ textStatus: "sent" })
+      .where(eq(promotionRecipients.promotionId, p.id));
+
+    const tally = await promotionRecipientTally(p.id);
+    expect(tally.total).toBe(2);
+    expect(tally.textSent).toBe(2);
+    expect(tally.deliveredParts).toBe(2);
+
+    // created_by null → not in a user's list; no throw
+    expect(await listPromotionsCreatedBy(gymId, "someone")).toEqual(
+      expect.not.arrayContaining([expect.objectContaining({ id: p.id })]),
+    );
   });
 });
