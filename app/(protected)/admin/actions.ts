@@ -87,6 +87,44 @@ export async function updateGymWahaSessionAction(
   }
 }
 
+/**
+ * Admin sets the gym's WhatsApp sending limits (CR-10): total messages/day and
+ * the reserve held back for reminders + activation that promotions can't touch.
+ */
+export async function updateGymSendLimitsAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const admin = await requireUserForAction("admin");
+  const gymId = String(formData.get("gymId") ?? "");
+  const wahaDailyCap = Number(formData.get("wahaDailyCap") ?? "");
+  const transactionalReserve = Number(formData.get("transactionalReserve") ?? "");
+
+  if (!Number.isInteger(wahaDailyCap) || !Number.isInteger(transactionalReserve)) {
+    return err("Enter whole numbers for both limits.");
+  }
+  if (transactionalReserve >= wahaDailyCap) {
+    return err("The reserve must be smaller than the daily cap.");
+  }
+
+  try {
+    await updateGym(gymId, { wahaDailyCap, transactionalReserve });
+    await writeAudit({
+      actorUserId: admin.id,
+      actorRole: "admin",
+      gymId,
+      action: "gym.send_limits",
+      targetType: "gym",
+      targetId: gymId,
+      meta: { wahaDailyCap, transactionalReserve },
+    });
+    revalidatePath(`/admin/gyms/${gymId}`);
+    return ok();
+  } catch (error) {
+    return err(toMessage(error));
+  }
+}
+
 export type CreateOwnerResult = {
   email: string;
   password: string;

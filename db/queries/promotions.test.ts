@@ -27,8 +27,14 @@ import {
   listPromotionsByStatus,
   listPromotionsCreatedBy,
   listPromotionsForGym,
+  listPromotionsWithGym,
+  markPromotionPaid,
+  markPromotionRefunded,
+  pricePromotion,
   promotionRecipientTally,
+  rejectPromotion,
   replacePromotionRecipients,
+  startPromotionSending,
   submitPromotion,
 } from "./promotions";
 
@@ -292,5 +298,100 @@ dbSuite("state transitions", () => {
     expect(await listPromotionsCreatedBy(gymId, "someone")).toEqual(
       expect.not.arrayContaining([expect.objectContaining({ id: p.id })]),
     );
+  });
+});
+
+dbSuite("admin transitions", () => {
+  async function submitted(body = "admin flow", perImage = false) {
+    const p = await createPromotionDraft({
+      gymId,
+      body,
+      imageDriveFileId: perImage ? "drive-x" : null,
+      imageMime: perImage ? "image/png" : null,
+    });
+    await replacePromotionRecipients(p.id, [
+      { phone: "+919700000030", source: "contact" },
+      { phone: "+919700000031", source: "contact" },
+    ]);
+    await submitPromotion({ gymId, promotionId: p.id });
+    return p.id;
+  }
+
+  it("pricePromotion computes the estimate and only fires from submitted", async () => {
+    const id = await submitted("price me", true); // text + image → 2 parts
+    const priced = await pricePromotion({ promotionId: id, perMessagePaise: 40 });
+    expect(priced.status).toBe("priced");
+    expect(priced.perMessagePaise).toBe(40);
+    // 40 × 2 parts × 2 recipients
+    expect(priced.estimatedTotalPaise).toBe(160);
+
+    await expect(
+      pricePromotion({ promotionId: id, perMessagePaise: 40 }),
+    ).rejects.toThrow(/submitted/i);
+  });
+
+  it("send is blocked until paid; the full happy path reaches sending", async () => {
+    const id = await submitted();
+    await pricePromotion({ promotionId: id, perMessagePaise: 30 });
+
+    await expect(
+      startPromotionSending({ promotionId: id }),
+    ).rejects.toThrow(/only be sent once it is paid/i);
+
+    await approvePromotionEstimate({ gymId, promotionId: id });
+
+    // paid requires the owner's prepaid acknowledgement first
+    await expect(
+      markPromotionPaid({ promotionId: id }),
+    ).rejects.toThrow(/prepaid/i);
+
+    await acknowledgePromotionPrepaid({ gymId, promotionId: id });
+    const paid = await markPromotionPaid({ promotionId: id });
+    expect(paid.status).toBe("paid");
+
+    const sending = await startPromotionSending({ promotionId: id });
+    expect(sending.status).toBe("sending");
+  });
+
+  it("rejectPromotion works pre-payment and records the note", async () => {
+    const id = await submitted();
+    const rejected = await rejectPromotion({
+      promotionId: id,
+      adminNote: "Content not allowed",
+    });
+    expect(rejected.status).toBe("rejected");
+    expect(rejected.adminNote).toBe("Content not allowed");
+  });
+
+  it("markPromotionRefunded needs an outstanding refund", async () => {
+    const id = await submitted();
+    await expect(
+      markPromotionRefunded({ promotionId: id }),
+    ).rejects.toThrow(/no refund outstanding/i);
+
+    await db
+      .update(promotions)
+      .set({
+        status: "partly_failed",
+        settlement: "refund_due",
+        billedTotalPaise: 30,
+        refundPaise: 30,
+        prepaidPaise: 60,
+      })
+      .where(eq(promotions.id, id));
+
+    const refunded = await markPromotionRefunded({ promotionId: id });
+    expect(refunded.settlement).toBe("refunded");
+  });
+
+  it("listPromotionsWithGym carries the gym name and filters by status", async () => {
+    const id = await submitted();
+    const all = await listPromotionsWithGym();
+    const row = all.find((p) => p.id === id);
+    expect(row?.gymName).toMatch(/^test_promo /);
+
+    const filtered = await listPromotionsWithGym(["submitted"]);
+    expect(filtered.every((p) => p.status === "submitted")).toBe(true);
+    expect(filtered.some((p) => p.id === id)).toBe(true);
   });
 });

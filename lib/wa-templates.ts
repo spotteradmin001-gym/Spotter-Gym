@@ -35,6 +35,8 @@ export type PasswordResetInput = {
   tempPassword?: string | null;
 };
 
+import { formatPaise } from "./money";
+
 function greeting(name?: string | null): string {
   const trimmed = name?.trim();
   return trimmed ? `Hi ${trimmed},` : "Hi,";
@@ -97,5 +99,60 @@ export function passwordResetMessage(input: PasswordResetInput): string {
     );
   }
 
+  return lines.join("\n");
+}
+
+export type PromotionQuoteInput = {
+  gymName: string;
+  recipientCount: number;
+  /** Billable parts per recipient (1 for text-only or image-only, 2 for both). */
+  partsPerRecipient: number;
+  perMessagePaise: number;
+  estimatedTotalPaise: number;
+};
+
+/** The "Send quote via WhatsApp" message — CR-10 step 6. */
+export function promotionQuoteMessage(input: PromotionQuoteInput): string {
+  return [
+    `Spotter promotion quote for ${input.gymName}:`,
+    "",
+    `Recipients: ${input.recipientCount}`,
+    `Messages per recipient: ${input.partsPerRecipient}`,
+    `Charge per message: ${formatPaise(input.perMessagePaise)}`,
+    `Estimated total: ${formatPaise(input.estimatedTotalPaise)}`,
+    "",
+    "Approve the estimate in your Promotions tab, then prepay this amount (UPI / bank / cash). Sending starts once we confirm the payment. Any messages that don't deliver are refunded.",
+  ].join("\n");
+}
+
+export type PromotionBillInput = {
+  gymName: string;
+  /** Parts actually delivered (status 'sent'). */
+  deliveredParts: number;
+  perMessagePaise: number;
+  billedTotalPaise: number;
+  prepaidPaise: number;
+  refundPaise: number;
+};
+
+/** The "Send bill via WhatsApp" message — CR-10 step 10. */
+export function promotionBillMessage(input: PromotionBillInput): string {
+  const lines = [
+    `Spotter promotion bill for ${input.gymName}:`,
+    "",
+    `Delivered messages: ${input.deliveredParts}`,
+    `Charge per message: ${formatPaise(input.perMessagePaise)}`,
+    `Final bill: ${formatPaise(input.billedTotalPaise)}`,
+    `Prepaid: ${formatPaise(input.prepaidPaise)}`,
+  ];
+  if (input.refundPaise > 0) {
+    lines.push(
+      `Refund due to you: ${formatPaise(input.refundPaise)}`,
+      "",
+      "We'll refund this to you offline.",
+    );
+  } else {
+    lines.push("", "Fully settled — thank you.");
+  }
   return lines.join("\n");
 }

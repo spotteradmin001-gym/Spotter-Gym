@@ -5,6 +5,8 @@ import {
   memberActivationMessage,
   ownerWelcomeMessage,
   passwordResetMessage,
+  promotionBillMessage,
+  promotionQuoteMessage,
 } from "./wa-templates";
 
 describe("staff welcome messages", () => {
@@ -66,5 +68,46 @@ describe("passwordResetMessage", () => {
     });
     expect(msg).toContain("Fresh#Pass9");
     expect(msg).toContain("set your own password");
+  });
+});
+
+describe("promotion quote / bill messages", () => {
+  it("quote surfaces the counts, per-message charge and estimate", () => {
+    const msg = promotionQuoteMessage({
+      gymName: "Iron Works",
+      recipientCount: 120,
+      partsPerRecipient: 2,
+      perMessagePaise: 50,
+      estimatedTotalPaise: 12_000,
+    });
+    expect(msg).toContain("Iron Works");
+    expect(msg).toContain("Recipients: 120");
+    expect(msg).toContain("Messages per recipient: 2");
+    expect(msg).toContain("₹0.50");
+    expect(msg).toContain("₹120.00");
+  });
+
+  it("bill shows a refund line only when money is owed back", () => {
+    const withRefund = promotionBillMessage({
+      gymName: "Iron Works",
+      deliveredParts: 233,
+      perMessagePaise: 50,
+      billedTotalPaise: 11_650,
+      prepaidPaise: 12_000,
+      refundPaise: 350,
+    });
+    expect(withRefund).toContain("Delivered messages: 233");
+    expect(withRefund).toContain("Refund due to you: ₹3.50");
+
+    const exact = promotionBillMessage({
+      gymName: "Iron Works",
+      deliveredParts: 240,
+      perMessagePaise: 50,
+      billedTotalPaise: 12_000,
+      prepaidPaise: 12_000,
+      refundPaise: 0,
+    });
+    expect(exact).not.toContain("Refund due");
+    expect(exact).toContain("Fully settled");
   });
 });

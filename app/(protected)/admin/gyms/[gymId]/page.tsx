@@ -16,6 +16,7 @@ import {
   setUserActiveAction,
 } from "../../actions";
 import { CreateOwnerForm } from "./create-owner-form";
+import { WahaLimitsForm } from "./waha-limits-form";
 import { WahaSessionForm } from "./waha-session-form";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +72,19 @@ export default async function AdminGymDetailPage({
             gymId={gym.id}
             wahaSessionName={gym.wahaSessionName}
             slug={gym.slug}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>WhatsApp sending limits</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <WahaLimitsForm
+            gymId={gym.id}
+            wahaDailyCap={gym.wahaDailyCap}
+            transactionalReserve={gym.transactionalReserve}
           />
         </CardContent>
       </Card>
