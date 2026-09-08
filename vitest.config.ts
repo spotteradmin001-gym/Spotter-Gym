@@ -40,6 +40,7 @@ export default defineConfig({
     include: [
       "src/**/*.test.ts",
       "src/**/*.test.tsx",
+      "components/**/*.test.tsx",
       "db/**/*.test.ts",
       "lib/**/*.test.ts",
       "app/**/*.test.ts",

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { WaContactLink } from "@/components/wa-contact-link";
 import { getGym, getUser } from "@/db/queries";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +34,16 @@ export default async function AdminUserDrillInPage({
         <CardContent className="grid grid-cols-2 gap-2 text-sm">
           <Field label="Role" value={user.role} />
           <Field label="Status" value={user.isActive ? "Active" : "Inactive"} />
-          <Field label="Phone" value={user.phone ?? "—"} />
+          <div className="flex flex-col">
+            <span className="text-xs text-muted">Phone</span>
+            <span className="inline-flex items-center gap-1.5 font-medium">
+              {user.phone ?? "—"}
+              <WaContactLink
+                phone={user.phone}
+                label={`Message ${user.email} on WhatsApp`}
+              />
+            </span>
+          </div>
           <Field
             label="Must change password"
             value={user.mustChangePassword ? "Yes" : "No"}

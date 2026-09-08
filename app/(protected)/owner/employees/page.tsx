@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { WaContactLink } from "@/components/wa-contact-link";
 import { listEmployees } from "@/db/queries";
 import { requireOwner } from "@/src/features/auth/guards";
 
@@ -44,17 +45,23 @@ export default async function OwnerEmployeesPage() {
                   {!emp.isActive && " · inactive"}
                 </p>
               </div>
-              <form action={setEmployeeActiveAction}>
-                <input type="hidden" name="employeeId" value={emp.id} />
-                <input
-                  type="hidden"
-                  name="isActive"
-                  value={String(!emp.isActive)}
+              <div className="flex items-center gap-2">
+                <WaContactLink
+                  phone={emp.phone}
+                  label={`Message ${emp.name} on WhatsApp`}
                 />
-                <Button type="submit" variant="secondary" size="sm">
-                  {emp.isActive ? "Deactivate" : "Reactivate"}
-                </Button>
-              </form>
+                <form action={setEmployeeActiveAction}>
+                  <input type="hidden" name="employeeId" value={emp.id} />
+                  <input
+                    type="hidden"
+                    name="isActive"
+                    value={String(!emp.isActive)}
+                  />
+                  <Button type="submit" variant="secondary" size="sm">
+                    {emp.isActive ? "Deactivate" : "Reactivate"}
+                  </Button>
+                </form>
+              </div>
             </CardHeader>
             <CardContent>
               <PermissionsForm employee={emp} />

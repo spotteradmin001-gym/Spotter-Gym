@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
+import { WaContactLink } from "@/components/wa-contact-link";
 import {
   getMember,
   listDuesForMember,
@@ -67,7 +68,16 @@ export default async function OwnerMemberDetailPage({
           </form>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
-          <Field label="Phone" value={member.phone} />
+          <div className="flex flex-col">
+            <span className="text-xs text-muted">Phone</span>
+            <span className="inline-flex items-center gap-1.5 font-medium">
+              {member.phone}
+              <WaContactLink
+                phone={member.phone}
+                label={`Message ${member.name} on WhatsApp`}
+              />
+            </span>
+          </div>
           <Field label="Email" value={member.email ?? "—"} />
           <Field label="Joined" value={member.joinDate} />
           <Field

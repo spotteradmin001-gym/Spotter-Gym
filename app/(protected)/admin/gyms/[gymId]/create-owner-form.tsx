@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { ShareViaWhatsApp } from "@/components/share-via-whatsapp";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
@@ -40,6 +41,17 @@ export function CreateOwnerForm({ gymId }: { gymId: string }) {
         <p className="text-muted">
           They&apos;ll be asked to set their own password on first sign-in.
         </p>
+        {state.data.phone ? (
+          <ShareViaWhatsApp
+            phone={state.data.phone}
+            message={state.data.shareMessage}
+            className="self-start"
+          />
+        ) : (
+          <p className="text-xs text-muted">
+            Add a phone number to share these details via WhatsApp.
+          </p>
+        )}
       </div>
     );
   }

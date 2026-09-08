@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { ShareViaWhatsApp } from "@/components/share-via-whatsapp";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
@@ -27,12 +28,25 @@ export function AddEmployeeForm() {
 
   if (state?.ok) {
     return (
-      <div className="rounded-md border border-success/40 bg-muted-background p-3 text-sm">
-        Login created for <strong>{state.data.email}</strong>. One-time password
-        (shown once):{" "}
-        <code className="rounded bg-card px-1 py-0.5 font-mono">
-          {state.data.password}
-        </code>
+      <div className="flex flex-col gap-2 rounded-md border border-success/40 bg-muted-background p-3 text-sm">
+        <p>
+          Login created for <strong>{state.data.email}</strong>. One-time
+          password (shown once):{" "}
+          <code className="rounded bg-card px-1 py-0.5 font-mono">
+            {state.data.password}
+          </code>
+        </p>
+        {state.data.phone ? (
+          <ShareViaWhatsApp
+            phone={state.data.phone}
+            message={state.data.shareMessage}
+            className="self-start"
+          />
+        ) : (
+          <p className="text-xs text-muted">
+            Add a phone number to share these details via WhatsApp.
+          </p>
+        )}
       </div>
     );
   }
