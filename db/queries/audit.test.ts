@@ -3,7 +3,7 @@
  * Skipped when DATABASE_URL is unset. FIND-MY-FIXTURE: action `test_audit.*`,
  * gym / user name prefix `test_staff_activity`.
  */
-import { eq, like } from "drizzle-orm";
+import { inArray, like } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 
 const dbSuite = process.env.DATABASE_URL ? describe : describe.skip;
@@ -111,18 +111,34 @@ async function seedAudit(row: {
   });
 }
 
+/**
+ * Clears every `test_staff_activity %` fixture, not just this run's, so a run
+ * killed before its afterAll can't wedge the next one on the shared branch
+ * (employees has a RESTRICT FK on the gym). Deleting the users cascades their
+ * employees rows; audits then have a nullable gym FK so the gym delete is safe.
+ */
+async function purgeStaffActivityFixtures(): Promise<void> {
+  const stale = await db
+    .select({ id: gyms.id })
+    .from(gyms)
+    .where(like(gyms.name, "test_staff_activity %"));
+  const ids = stale.map((r) => r.id);
+  if (ids.length) {
+    await db.delete(audits).where(inArray(audits.gymId, ids));
+  }
+  await db.delete(users).where(like(users.email, "test_staff_activity_%"));
+  if (ids.length) {
+    await db.delete(gyms).where(inArray(gyms.id, ids));
+  }
+}
+
 if (process.env.DATABASE_URL) {
-  afterAll(async () => {
-    for (const g of [saGymA, saGymB].filter(Boolean)) {
-      await db.delete(audits).where(eq(audits.gymId, g));
-    }
-    await db.delete(users).where(like(users.email, "test_staff_activity_%"));
-    await db.delete(gyms).where(like(gyms.name, "test_staff_activity %"));
-  });
+  afterAll(purgeStaffActivityFixtures);
 }
 
 dbSuite("listStaffActivity", () => {
   it("sets up two gyms with employee and owner actors", async () => {
+    await purgeStaffActivityFixtures();
     saGymA = (await createGym({ name: "test_staff_activity A" })).id;
     saGymB = (await createGym({ name: "test_staff_activity B" })).id;
 
