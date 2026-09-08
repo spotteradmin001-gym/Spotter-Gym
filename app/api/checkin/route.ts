@@ -1,15 +1,29 @@
 import { NextResponse } from "next/server";
 
 import { CheckinError, getGymBySlug, getSessionUser, recordCheckin } from "@/db/queries";
+import { hitRateLimit } from "@/src/features/auth/rate-limit";
 import { readSessionCookie } from "@/src/features/auth/session-cookie";
 import { verifyCheckinToken } from "@/src/features/checkin/token";
 
 export const dynamic = "force-dynamic";
 
+function clientIp(request: Request): string {
+  const fwd = request.headers.get("x-forwarded-for");
+  return fwd?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
+}
+
 export async function POST(request: Request) {
   const user = await getSessionUser(await readSessionCookie());
   if (!user || user.role !== "member") {
     return NextResponse.json({ error: "Please sign in." }, { status: 401 });
+  }
+
+  const limit = hitRateLimit(`checkin|${clientIp(request)}|${user.id}`);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts — wait a minute and try again." },
+      { status: 429 },
+    );
   }
 
   let body: { gymSlug?: string; token?: string; lat?: number; lng?: number };

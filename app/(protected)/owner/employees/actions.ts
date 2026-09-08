@@ -8,6 +8,7 @@ import {
   createEmployee,
   setEmployeeActive,
   setPermissions,
+  writeAudit,
   type EmployeePermission,
   type Permission,
 } from "@/db/queries";
@@ -25,13 +26,22 @@ export async function createEmployeeAction(
   _prev: ActionState<CreateEmployeeResult>,
   formData: FormData,
 ): Promise<ActionState<CreateEmployeeResult>> {
-  const { gymId } = await requireOwnerGym();
+  const { user, gymId } = await requireOwnerGym();
   try {
     const { employee, password } = await createEmployee({
       gymId,
       name: String(formData.get("name") ?? ""),
       phone: String(formData.get("phone") ?? "") || undefined,
       email: String(formData.get("email") ?? ""),
+    });
+    await writeAudit({
+      actorUserId: user.id,
+      actorRole: user.role,
+      gymId,
+      action: "employee.create",
+      targetType: "employee",
+      targetId: employee.id,
+      meta: { email: employee.email },
     });
     revalidatePath("/owner/employees");
     return ok({ email: employee.email, password });
@@ -59,6 +69,15 @@ export async function setPermissionsAction(
 
   try {
     await setPermissions({ gymId, employeeId, grantedBy: user.id, permissions });
+    await writeAudit({
+      actorUserId: user.id,
+      actorRole: user.role,
+      gymId,
+      action: "employee.permissions",
+      targetType: "employee",
+      targetId: employeeId,
+      meta: { permissions },
+    });
     revalidatePath("/owner/employees");
     return ok();
   } catch (error) {

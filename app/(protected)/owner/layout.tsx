@@ -14,6 +14,7 @@ const NAV = [
   { href: "/owner/checkin-qr", label: "QR code" },
   { href: "/owner/employees", label: "Employees" },
   { href: "/owner/approvals", label: "Approvals" },
+  { href: "/owner/audit", label: "Activity" },
   { href: "/owner/settings", label: "Settings" },
 ];
 

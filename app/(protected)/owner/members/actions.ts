@@ -12,6 +12,7 @@ import {
   setMemberFee,
   setMemberStatus,
   updateMember,
+  writeAudit,
   type MemberStatus,
 } from "@/db/queries";
 import { appUrl } from "@/lib/app-url";
@@ -37,7 +38,7 @@ export async function createMemberAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const { gymId } = await requireOwnerGym();
+  const { user, gymId } = await requireOwnerGym();
   const anchorRaw = String(formData.get("billingAnchorDay") ?? "").trim();
 
   let memberId: string;
@@ -56,6 +57,14 @@ export async function createMemberAction(
     return err(toMessage(error));
   }
 
+  await writeAudit({
+    actorUserId: user.id,
+    actorRole: user.role,
+    gymId,
+    action: "member.create",
+    targetType: "member",
+    targetId: memberId,
+  });
   revalidatePath("/owner/members");
   redirect(`/owner/members/${memberId}`);
 }
@@ -128,10 +137,20 @@ export async function regenerateDuesAction(): Promise<void> {
 }
 
 export async function setMemberStatusAction(formData: FormData): Promise<void> {
-  const { gymId } = await requireOwnerGym();
+  const { user, gymId } = await requireOwnerGym();
   const id = String(formData.get("id") ?? "");
   const status = String(formData.get("status") ?? "") as MemberStatus;
-  await setMemberStatus(gymId, id, status === "inactive" ? "inactive" : "active");
+  const next = status === "inactive" ? "inactive" : "active";
+  await setMemberStatus(gymId, id, next);
+  await writeAudit({
+    actorUserId: user.id,
+    actorRole: user.role,
+    gymId,
+    action: "member.status",
+    targetType: "member",
+    targetId: id,
+    meta: { status: next },
+  });
   revalidatePath("/owner/members");
   revalidatePath(`/owner/members/${id}`);
 }

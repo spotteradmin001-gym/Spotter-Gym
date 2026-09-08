@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { PaymentError, recordPayment } from "@/db/queries";
+import { PaymentError, recordPayment, writeAudit } from "@/db/queries";
 import { rupeesToPaise } from "@/lib/money";
 import { err, ok, type ActionState } from "@/lib/result";
 import { requireOwnerGym } from "@/src/features/auth/owner-scope";
@@ -33,6 +33,15 @@ export async function recordPaymentAction(
       method,
       note,
       recordedBy: user.id,
+    });
+    await writeAudit({
+      actorUserId: user.id,
+      actorRole: user.role,
+      gymId,
+      action: "payment.record",
+      targetType: "member",
+      targetId: memberId,
+      meta: { amountPaise: rupeesToPaise(rupees), method, paidOn },
     });
     revalidatePath("/owner/payments");
     revalidatePath(`/owner/members/${memberId}`);
