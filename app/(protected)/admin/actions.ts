@@ -8,6 +8,8 @@ import {
   createGym,
   createOwnerForGym,
   getGym,
+  resetCredential,
+  revealCredential,
   setGymActive,
   setUserActive,
   updateGym,
@@ -17,6 +19,7 @@ import { appUrl } from "@/lib/app-url";
 import { err, ok, type ActionState } from "@/lib/result";
 import { ownerWelcomeMessage } from "@/lib/wa-templates";
 import { requireUserForAction } from "@/src/features/auth/guards";
+import type { ResetResult, RevealResult } from "@/lib/credential-ui";
 
 function toMessage(error: unknown): string {
   if (error instanceof AuthError || error instanceof GymError) return error.message;
@@ -129,6 +132,36 @@ export async function createOwnerAction(
       phone: user.phone ?? null,
       shareMessage,
     });
+  } catch (error) {
+    return err(toMessage(error));
+  }
+}
+
+export async function revealOwnerPasswordAction(
+  _prev: ActionState<RevealResult>,
+  formData: FormData,
+): Promise<ActionState<RevealResult>> {
+  const admin = await requireUserForAction("admin");
+  const targetUserId = String(formData.get("targetUserId") ?? "");
+  try {
+    const password = await revealCredential(admin, targetUserId);
+    return ok({ password });
+  } catch (error) {
+    return err(toMessage(error));
+  }
+}
+
+export async function resetOwnerPasswordAction(
+  _prev: ActionState<ResetResult>,
+  formData: FormData,
+): Promise<ActionState<ResetResult>> {
+  const admin = await requireUserForAction("admin");
+  const targetUserId = String(formData.get("targetUserId") ?? "");
+  const gymId = String(formData.get("gymId") ?? "");
+  try {
+    const result = await resetCredential(admin, targetUserId);
+    if (gymId) revalidatePath(`/admin/gyms/${gymId}`);
+    return ok(result);
   } catch (error) {
     return err(toMessage(error));
   }

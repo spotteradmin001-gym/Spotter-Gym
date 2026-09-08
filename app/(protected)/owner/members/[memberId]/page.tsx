@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { CredentialControls } from "@/components/credential-controls";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
@@ -17,7 +18,7 @@ import { formatPaise } from "@/lib/money";
 import { requireOwner } from "@/src/features/auth/guards";
 
 import { RecordPaymentForm } from "../../payments/record-payment-form";
-import { setMemberStatusAction } from "../actions";
+import { resetMemberPasswordAction, setMemberStatusAction } from "../actions";
 import { ActivationPanel } from "./activation-panel";
 import { EditMemberForm, MemberFeeForm } from "./member-forms";
 import { SendReminderNow } from "./send-reminder";
@@ -95,8 +96,20 @@ export default async function OwnerMemberDetailPage({
         <CardHeader>
           <CardTitle>Member login</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-3">
           <ActivationPanel memberId={member.id} activated={member.userId != null} />
+          {member.userId != null && (
+            <div className="border-t border-border pt-3">
+              <CredentialControls
+                targetUserId={member.userId}
+                targetRole="member"
+                phone={member.phone}
+                vaultEnabled={false}
+                resetAction={resetMemberPasswordAction}
+                extraFields={{ memberId: member.id }}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 

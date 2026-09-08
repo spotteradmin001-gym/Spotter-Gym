@@ -10,6 +10,8 @@ import {
   createMemberActivationToken,
   generateDuesForGym,
   getGym,
+  getMember,
+  resetCredential,
   setMemberFee,
   setMemberStatus,
   updateMember,
@@ -17,6 +19,7 @@ import {
   type MemberStatus,
 } from "@/db/queries";
 import { appUrl } from "@/lib/app-url";
+import type { ResetResult } from "@/lib/credential-ui";
 import { MailSendError, sendMail } from "@/lib/mail";
 import { rupeesToPaise } from "@/lib/money";
 import { err, ok, type ActionState } from "@/lib/result";
@@ -24,7 +27,9 @@ import { memberActivationMessage } from "@/lib/wa-templates";
 import { requireOwnerGym } from "@/src/features/auth/owner-scope";
 
 function toMessage(error: unknown): string {
-  if (error instanceof MemberError) return error.message;
+  if (error instanceof MemberError || error instanceof AuthError) {
+    return error.message;
+  }
   return "Something went wrong. Try again.";
 }
 
@@ -145,6 +150,32 @@ export async function sendActivationLinkAction(
     }
   }
   return ok({ link, emailed, phone, shareMessage });
+}
+
+/**
+ * Reset an activated member's login password (CR-6). Members without a login
+ * are handled by the activation-link flow above, not this action.
+ */
+export async function resetMemberPasswordAction(
+  _prev: ActionState<ResetResult>,
+  formData: FormData,
+): Promise<ActionState<ResetResult>> {
+  const { user, gymId } = await requireOwnerGym();
+  const memberId = String(formData.get("memberId") ?? "");
+  try {
+    const member = await getMember(gymId, memberId);
+    if (!member) return err("That member no longer exists.");
+    if (!member.userId) {
+      return err(
+        "This member hasn't activated a login yet — send an activation link instead.",
+      );
+    }
+    const result = await resetCredential(user, member.userId);
+    revalidatePath(`/owner/members/${memberId}`);
+    return ok(result);
+  } catch (error) {
+    return err(toMessage(error));
+  }
 }
 
 export async function regenerateDuesAction(): Promise<void> {
