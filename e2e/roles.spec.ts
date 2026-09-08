@@ -42,3 +42,25 @@ test("a wrong password is rejected without leaking which field", async ({ page }
   await expect(page.getByRole("alert")).toContainText("Incorrect email or password");
   await expect(page).toHaveURL(/\/login/);
 });
+
+test("the owner activity log is gone (CR-4)", async ({ page }) => {
+  await login(page, "owner@demo.spotter", "DemoOwner#2026");
+  await expect(page).toHaveURL(/\/owner$/);
+  // The nav no longer offers it.
+  await expect(page.getByRole("link", { name: "Activity" })).toHaveCount(0);
+  // And the route itself is gone.
+  const res = await page.goto("/owner/audit");
+  expect(res?.status()).toBe(404);
+});
+
+test("the admin audit log stays admin-only (CR-4)", async ({ page }) => {
+  // An owner cannot reach it — non-admin roles are bounced to login.
+  await login(page, "owner@demo.spotter", "DemoOwner#2026");
+  await page.goto("/admin/audit");
+  await expect(page).toHaveURL(/\/login/);
+
+  // An admin can.
+  await login(page, ADMIN_EMAIL, ADMIN_PW);
+  await page.goto("/admin/audit");
+  await expect(page.getByRole("heading", { name: "Audit log" })).toBeVisible();
+});
