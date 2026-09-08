@@ -86,7 +86,7 @@ export default async function OwnerStaffActivityPage({
             <Select
               name="employee"
               defaultValue={employeeUserId ?? ""}
-              className="h-8 w-44"
+              className="h-10 w-44"
               aria-label="Filter by employee"
             >
               <option value="">All employees</option>
@@ -111,7 +111,7 @@ export default async function OwnerStaffActivityPage({
             No staff activity in this period.
           </p>
         ) : (
-          <Table>
+          <Table variant="stacked">
             <THead>
               <TR>
                 <TH>When</TH>
@@ -124,10 +124,10 @@ export default async function OwnerStaffActivityPage({
             <TBody>
               {rows.map((r) => (
                 <TR key={r.id}>
-                  <TD className="whitespace-nowrap">
+                  <TD label="When" className="whitespace-nowrap">
                     {new Date(r.createdAt).toLocaleString()}
                   </TD>
-                  <TD>
+                  <TD label="Employee">
                     {r.actorName ??
                       (r.actorUserId
                         ? nameByUserId.get(r.actorUserId)
@@ -135,8 +135,8 @@ export default async function OwnerStaffActivityPage({
                       r.actorEmail ??
                       "—"}
                   </TD>
-                  <TD>{ACTION_LABELS[r.action] ?? r.action}</TD>
-                  <TD className="text-muted">
+                  <TD label="Action">{ACTION_LABELS[r.action] ?? r.action}</TD>
+                  <TD label="Target" className="text-muted">
                     {r.targetType === "member" && r.targetId ? (
                       <Link
                         href={`/owner/members/${r.targetId}`}
@@ -148,7 +148,7 @@ export default async function OwnerStaffActivityPage({
                       r.targetType
                     )}
                   </TD>
-                  <TD>{r.amountPaise == null ? "—" : formatPaise(r.amountPaise)}</TD>
+                  <TD label="Amount">{r.amountPaise == null ? "—" : formatPaise(r.amountPaise)}</TD>
                 </TR>
               ))}
             </TBody>

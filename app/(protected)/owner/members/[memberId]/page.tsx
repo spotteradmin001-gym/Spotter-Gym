@@ -54,7 +54,7 @@ export default async function OwnerMemberDetailPage({
       </Link>
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between">
+        <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
           <CardTitle>{member.name}</CardTitle>
           <form action={setMemberStatusAction}>
             <input type="hidden" name="id" value={member.id} />
@@ -159,7 +159,7 @@ export default async function OwnerMemberDetailPage({
               list, or wait for the daily run.
             </p>
           ) : (
-            <Table>
+            <Table variant="stacked">
               <THead>
                 <TR>
                   <TH>Period</TH>
@@ -171,10 +171,10 @@ export default async function OwnerMemberDetailPage({
               <TBody>
                 {memberDues.map((d) => (
                   <TR key={d.id}>
-                    <TD>{d.periodMonth.slice(0, 7)}</TD>
-                    <TD>{d.dueDate}</TD>
-                    <TD>{formatPaise(d.amountDuePaise)}</TD>
-                    <TD className={d.status === "pending" ? "" : "text-muted"}>
+                    <TD label="Period">{d.periodMonth.slice(0, 7)}</TD>
+                    <TD label="Due date">{d.dueDate}</TD>
+                    <TD label="Amount">{formatPaise(d.amountDuePaise)}</TD>
+                    <TD label="Status" className={d.status === "pending" ? "" : "text-muted"}>
                       {d.status}
                     </TD>
                   </TR>
@@ -205,7 +205,7 @@ export default async function OwnerMemberDetailPage({
           {memberPayments.length === 0 ? (
             <p className="p-4 text-sm text-muted">No payments recorded.</p>
           ) : (
-            <Table>
+            <Table variant="stacked">
               <THead>
                 <TR>
                   <TH>Date</TH>
@@ -217,10 +217,10 @@ export default async function OwnerMemberDetailPage({
               <TBody>
                 {memberPayments.map((p) => (
                   <TR key={p.id}>
-                    <TD>{p.paidOn}</TD>
-                    <TD>{formatPaise(p.amountPaise)}</TD>
-                    <TD>{p.method}</TD>
-                    <TD className="text-muted">{p.note ?? "—"}</TD>
+                    <TD label="Date">{p.paidOn}</TD>
+                    <TD label="Amount">{formatPaise(p.amountPaise)}</TD>
+                    <TD label="Method">{p.method}</TD>
+                    <TD label="Note" className="text-muted">{p.note ?? "—"}</TD>
                   </TR>
                 ))}
               </TBody>
@@ -236,7 +236,7 @@ export default async function OwnerMemberDetailPage({
         <CardContent className="flex flex-col gap-3">
           <SendReminderNow memberId={member.id} />
           {reminders.length > 0 && (
-            <Table>
+            <Table variant="stacked">
               <THead>
                 <TR>
                   <TH>Scheduled</TH>
@@ -248,9 +248,10 @@ export default async function OwnerMemberDetailPage({
               <TBody>
                 {reminders.map((r) => (
                   <TR key={r.id}>
-                    <TD>{r.scheduledFor}</TD>
-                    <TD>{r.kind}</TD>
+                    <TD label="Scheduled">{r.scheduledFor}</TD>
+                    <TD label="Kind">{r.kind}</TD>
                     <TD
+                      label="Status"
                       className={
                         r.status === "failed"
                           ? "text-destructive"
@@ -261,7 +262,7 @@ export default async function OwnerMemberDetailPage({
                     >
                       {r.status}
                     </TD>
-                    <TD className="text-muted">
+                    <TD label="Sent / error" className="text-muted">
                       {r.sentAt
                         ? new Date(r.sentAt).toLocaleString()
                         : r.error ?? "—"}
@@ -282,7 +283,7 @@ export default async function OwnerMemberDetailPage({
           {checkins.length === 0 ? (
             <p className="p-4 text-sm text-muted">No check-ins yet.</p>
           ) : (
-            <Table>
+            <Table variant="stacked">
               <THead>
                 <TR>
                   <TH>Date</TH>
@@ -292,8 +293,8 @@ export default async function OwnerMemberDetailPage({
               <TBody>
                 {checkins.map((c) => (
                   <TR key={c.date}>
-                    <TD>{c.date}</TD>
-                    <TD>{c.distanceM == null ? "—" : `${c.distanceM} m`}</TD>
+                    <TD label="Date">{c.date}</TD>
+                    <TD label="Distance">{c.distanceM == null ? "—" : `${c.distanceM} m`}</TD>
                   </TR>
                 ))}
               </TBody>

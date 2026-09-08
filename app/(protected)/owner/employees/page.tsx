@@ -44,7 +44,7 @@ export default async function OwnerEmployeesPage() {
       ) : (
         employees.map((emp) => (
           <Card key={emp.id}>
-            <CardHeader className="flex-row items-center justify-between">
+            <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
               <div>
                 <CardTitle>{emp.name}</CardTitle>
                 <p className="text-xs text-muted">

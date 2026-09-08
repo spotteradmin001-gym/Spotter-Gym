@@ -20,7 +20,7 @@ type Option = { id: string; name: string };
 function Submit({ label }: { label: string }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" size="sm" disabled={pending} aria-busy={pending}>
+    <Button type="submit" size="md" disabled={pending} aria-busy={pending}>
       {pending ? "Saving…" : label}
     </Button>
   );
@@ -36,8 +36,8 @@ function Feedback({ state }: { state: ActionState }) {
 export function AddCategoryForm() {
   const [state, action] = useActionState<ActionState, FormData>(addCategoryAction, null);
   return (
-    <form action={action} className="flex items-end gap-2">
-      <FormField htmlFor="cat-name" label="New category">
+    <form action={action} className="flex flex-wrap items-end gap-2">
+      <FormField htmlFor="cat-name" label="New category" className="min-w-0 flex-1">
         <Input id="cat-name" name="name" required minLength={2} />
       </FormField>
       <Submit label="Add" />

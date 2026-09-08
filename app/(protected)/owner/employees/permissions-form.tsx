@@ -15,7 +15,7 @@ const LABELS = PERMISSION_LABELS;
 function SaveButton() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" size="sm" disabled={pending} aria-busy={pending}>
+    <Button type="submit" size="md" disabled={pending} aria-busy={pending}>
       {pending ? "Saving…" : "Save permissions"}
     </Button>
   );
@@ -36,7 +36,7 @@ export function PermissionsForm({ employee }: { employee: Employee }) {
       <input type="hidden" name="employeeId" value={employee.id} />
       <div className="grid gap-1">
         {EMPLOYEE_PERMISSIONS.map((perm) => (
-          <div key={perm} className="flex items-center gap-4 text-sm">
+          <div key={perm} className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
             <label className="flex min-w-40 items-center gap-2">
               <input
                 type="checkbox"

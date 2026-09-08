@@ -125,12 +125,13 @@ body {
 
   table.table-stacked td {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
     gap: 1rem;
     padding: 0.5rem 0;
     text-align: right;
     white-space: normal;
+    min-height: 2.5rem;
   }
 
   table.table-stacked td:not(:last-child) {
@@ -146,6 +147,11 @@ body {
 
   table.table-stacked td:empty {
     display: none;
+  }
+
+  /* Inline row actions (Remove / Re-queue / toggles) stay comfortably tappable. */
+  table.table-stacked td form button {
+    min-height: 2.5rem;
   }
 }
 

@@ -25,13 +25,13 @@ export default async function ProtectedLayout({
 
   return (
     <div className="flex min-h-full flex-col">
-      <header className="flex items-center justify-between border-b border-border px-4 py-3">
+      <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
         <span className="font-semibold">Spotter</span>
-        <div className="flex items-center gap-3 text-sm">
-          <span className="text-muted">
+        <div className="flex min-w-0 items-center gap-3 text-sm">
+          <span className="truncate text-muted">
             {user.email} · {user.role}
           </span>
-          <form action={logoutAction}>
+          <form action={logoutAction} className="shrink-0">
             <Button type="submit" variant="secondary" size="sm">
               Sign out
             </Button>

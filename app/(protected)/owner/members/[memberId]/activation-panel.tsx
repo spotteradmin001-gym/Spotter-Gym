@@ -12,7 +12,7 @@ import { sendActivationLinkAction, type ActivationLinkResult } from "../actions"
 function SendButton({ activated }: { activated: boolean }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" size="sm" disabled={pending || activated} aria-busy={pending}>
+    <Button type="submit" size="md" disabled={pending || activated} aria-busy={pending}>
       {activated ? "Already has a login" : pending ? "Generating…" : "Send activation link"}
     </Button>
   );

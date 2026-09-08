@@ -14,7 +14,7 @@ const SAMPLE = { name: "Priya", amount: "₹1,500.00", due_date: "5 Oct 2026" };
 function SaveButton() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" size="sm" disabled={pending} aria-busy={pending}>
+    <Button type="submit" size="md" disabled={pending} aria-busy={pending}>
       {pending ? "Saving…" : "Save message"}
     </Button>
   );

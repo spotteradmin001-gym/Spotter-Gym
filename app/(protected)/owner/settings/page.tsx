@@ -69,7 +69,7 @@ export default async function OwnerSettingsPage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {fields.length > 0 && (
-            <Table>
+            <Table variant="stacked">
               <THead>
                 <TR>
                   <TH>Label</TH>
@@ -82,10 +82,10 @@ export default async function OwnerSettingsPage() {
               <TBody>
                 {fields.map((f) => (
                   <TR key={f.id}>
-                    <TD>{f.label}</TD>
-                    <TD className="font-mono text-xs">{f.key}</TD>
-                    <TD>{f.fieldType}</TD>
-                    <TD>
+                    <TD label="Label">{f.label}</TD>
+                    <TD label="Key" className="font-mono text-xs">{f.key}</TD>
+                    <TD label="Type">{f.fieldType}</TD>
+                    <TD label="Required">
                       <form action={toggleProfileFieldRequiredAction}>
                         <input type="hidden" name="id" value={f.id} />
                         <input type="hidden" name="required" value={String(!f.required)} />

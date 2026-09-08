@@ -11,7 +11,7 @@ import { sendReminderNowAction } from "../../reminders/actions";
 function Btn() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" size="sm" disabled={pending} aria-busy={pending}>
+    <Button type="submit" size="md" disabled={pending} aria-busy={pending}>
       {pending ? "Queuing…" : "Send reminder now"}
     </Button>
   );
