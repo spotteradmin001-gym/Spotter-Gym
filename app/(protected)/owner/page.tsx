@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getGym, ownerOverview } from "@/db/queries";
+import { getGym, ownerOverview, reminderCounts } from "@/db/queries";
 import { formatPaise } from "@/lib/money";
 import { requireOwner } from "@/src/features/auth/guards";
 
@@ -11,9 +11,10 @@ export default async function OwnerOverviewPage() {
   const user = await requireOwner();
   if (!user.gymId) notFound();
 
-  const [gym, overview] = await Promise.all([
+  const [gym, overview, reminders] = await Promise.all([
     getGym(user.gymId),
     ownerOverview(user.gymId),
+    reminderCounts(user.gymId),
   ]);
 
   return (
@@ -30,6 +31,21 @@ export default async function OwnerOverviewPage() {
           />
           <Tile label="Yet to receive" value={formatPaise(overview.outstandingPaise)} />
           <Tile label="Due today" value={formatPaise(overview.dueTodayPaise)} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Reminders</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-3 gap-3">
+          <Tile label="Sent today" value={String(reminders.sentToday)} />
+          <Tile label="Pending" value={String(reminders.pending)} />
+          <Tile
+            label="Failed"
+            value={String(reminders.failed)}
+            tone={reminders.failed > 0 ? "bad" : undefined}
+          />
         </CardContent>
       </Card>
 

@@ -13,7 +13,14 @@ import { dues, gyms, members, reminderJobs } from "@/db/schema";
 import { generateDuesForGym } from "./dues";
 import { createGym, updateGym } from "./gyms";
 import { createMember, setMemberStatus } from "./members";
-import { listReminderJobs, planRemindersForGym } from "./reminders";
+import {
+  ReminderError,
+  listReminderJobs,
+  planRemindersForGym,
+  queueImmediateReminder,
+  reminderCounts,
+  requeueReminderJob,
+} from "./reminders";
 
 let gymId = "";
 const AS_OF = new Date("2026-09-01T00:00:00Z");
@@ -99,5 +106,67 @@ dbSuite("planRemindersForGym", () => {
     void r;
     expect(await listReminderJobs(gymId, { memberId: m.id })).toHaveLength(0);
     await updateGym(gymId, { wahaSessionName: "test_rem_session" });
+  });
+});
+
+dbSuite("status visibility", () => {
+  it("requeueReminderJob re-arms a non-sent job; counts + queueImmediateReminder work", async () => {
+    const m = await createMember({
+      gymId,
+      name: "test_rem Status",
+      phone: "9700000009",
+      joinDate: "2026-01-01",
+    });
+    await generateDuesForGym(gymId, AS_OF);
+    await planRemindersForGym(gymId, AS_OF);
+
+    const jobs = await listReminderJobs(gymId, { memberId: m.id });
+    const job = jobs[0]!;
+    // mark it failed, then re-queue
+    await db
+      .update(reminderJobs)
+      .set({ status: "failed", error: "boom" })
+      .where(eq(reminderJobs.id, job.id));
+    await requeueReminderJob(gymId, job.id);
+    const after = (await listReminderJobs(gymId, { memberId: m.id })).find(
+      (j) => j.id === job.id,
+    );
+    expect(after?.status).toBe("pending");
+    expect(after?.error).toBeNull();
+
+    const counts = await reminderCounts(gymId, AS_OF);
+    expect(counts.pending).toBeGreaterThan(0);
+
+    // immediate reminder re-arms the on_due job for the soonest due, scheduled today
+    await queueImmediateReminder(gymId, m.id, new Date("2026-09-15T00:00:00Z"));
+    const all = await listReminderJobs(gymId, { memberId: m.id });
+    expect(
+      all.some(
+        (j) =>
+          j.kind === "on_due" &&
+          j.scheduledFor === "2026-09-15" &&
+          j.status === "pending",
+      ),
+    ).toBe(true);
+  });
+
+  it("queueImmediateReminder throws when the member has nothing pending", async () => {
+    const m = await createMember({
+      gymId,
+      name: "test_rem Clear",
+      phone: "9700000010",
+      joinDate: "2026-01-01",
+    });
+    // no dues generated for this member's future — but generateDuesForGym covers
+    // everyone; mark them all paid via a direct update for the test
+    await generateDuesForGym(gymId, AS_OF);
+    await db
+      .update(dues)
+      .set({ status: "paid" })
+      .where(eq(dues.memberId, m.id));
+
+    await expect(queueImmediateReminder(gymId, m.id)).rejects.toBeInstanceOf(
+      ReminderError,
+    );
   });
 });

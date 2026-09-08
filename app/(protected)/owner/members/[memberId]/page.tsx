@@ -10,6 +10,7 @@ import {
   listPayments,
   listProfileFields,
   listRecentCheckins,
+  listReminderJobs,
 } from "@/db/queries";
 import { formatPaise } from "@/lib/money";
 import { requireOwner } from "@/src/features/auth/guards";
@@ -18,6 +19,7 @@ import { RecordPaymentForm } from "../../payments/record-payment-form";
 import { setMemberStatusAction } from "../actions";
 import { ActivationPanel } from "./activation-panel";
 import { EditMemberForm, MemberFeeForm } from "./member-forms";
+import { SendReminderNow } from "./send-reminder";
 
 export const dynamic = "force-dynamic";
 
@@ -30,13 +32,15 @@ export default async function OwnerMemberDetailPage({
   if (!user.gymId) notFound();
   const { memberId } = await params;
 
-  const [member, fields, memberDues, memberPayments, checkins] = await Promise.all([
-    getMember(user.gymId, memberId),
-    listProfileFields(user.gymId),
-    listDuesForMember(user.gymId, memberId),
-    listPayments(user.gymId, { memberId }),
-    listRecentCheckins(user.gymId, memberId, 20),
-  ]);
+  const [member, fields, memberDues, memberPayments, checkins, reminders] =
+    await Promise.all([
+      getMember(user.gymId, memberId),
+      listProfileFields(user.gymId),
+      listDuesForMember(user.gymId, memberId),
+      listPayments(user.gymId, { memberId }),
+      listRecentCheckins(user.gymId, memberId, 20),
+      listReminderJobs(user.gymId, { memberId, limit: 20 }),
+    ]);
   if (!member) notFound();
 
   const today = new Date().toISOString().slice(0, 10);
@@ -194,6 +198,51 @@ export default async function OwnerMemberDetailPage({
                     <TD>{formatPaise(p.amountPaise)}</TD>
                     <TD>{p.method}</TD>
                     <TD className="text-muted">{p.note ?? "—"}</TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Reminders</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <SendReminderNow memberId={member.id} />
+          {reminders.length > 0 && (
+            <Table>
+              <THead>
+                <TR>
+                  <TH>Scheduled</TH>
+                  <TH>Kind</TH>
+                  <TH>Status</TH>
+                  <TH>Sent / error</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {reminders.map((r) => (
+                  <TR key={r.id}>
+                    <TD>{r.scheduledFor}</TD>
+                    <TD>{r.kind}</TD>
+                    <TD
+                      className={
+                        r.status === "failed"
+                          ? "text-destructive"
+                          : r.status === "sent"
+                            ? "text-success"
+                            : ""
+                      }
+                    >
+                      {r.status}
+                    </TD>
+                    <TD className="text-muted">
+                      {r.sentAt
+                        ? new Date(r.sentAt).toLocaleString()
+                        : r.error ?? "—"}
+                    </TD>
                   </TR>
                 ))}
               </TBody>
