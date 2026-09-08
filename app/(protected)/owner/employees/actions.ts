@@ -3,10 +3,13 @@
 import { revalidatePath } from "next/cache";
 
 import {
+  AuthError,
   EMPLOYEE_PERMISSIONS,
   EmployeeError,
   createEmployee,
   getGym,
+  resetCredential,
+  revealCredential,
   setEmployeeActive,
   setPermissions,
   writeAudit,
@@ -14,12 +17,15 @@ import {
   type Permission,
 } from "@/db/queries";
 import { appUrl } from "@/lib/app-url";
+import type { ResetResult, RevealResult } from "@/lib/credential-ui";
 import { err, ok, type ActionState } from "@/lib/result";
 import { employeeWelcomeMessage } from "@/lib/wa-templates";
 import { requireOwnerGym } from "@/src/features/auth/owner-scope";
 
 function toMessage(error: unknown): string {
-  if (error instanceof EmployeeError) return error.message;
+  if (error instanceof EmployeeError || error instanceof AuthError) {
+    return error.message;
+  }
   return "Something went wrong. Try again.";
 }
 
@@ -101,6 +107,35 @@ export async function setPermissionsAction(
     });
     revalidatePath("/owner/employees");
     return ok();
+  } catch (error) {
+    return err(toMessage(error));
+  }
+}
+
+export async function revealEmployeePasswordAction(
+  _prev: ActionState<RevealResult>,
+  formData: FormData,
+): Promise<ActionState<RevealResult>> {
+  const { user } = await requireOwnerGym();
+  const targetUserId = String(formData.get("targetUserId") ?? "");
+  try {
+    const password = await revealCredential(user, targetUserId);
+    return ok({ password });
+  } catch (error) {
+    return err(toMessage(error));
+  }
+}
+
+export async function resetEmployeePasswordAction(
+  _prev: ActionState<ResetResult>,
+  formData: FormData,
+): Promise<ActionState<ResetResult>> {
+  const { user } = await requireOwnerGym();
+  const targetUserId = String(formData.get("targetUserId") ?? "");
+  try {
+    const result = await resetCredential(user, targetUserId);
+    revalidatePath("/owner/employees");
+    return ok(result);
   } catch (error) {
     return err(toMessage(error));
   }

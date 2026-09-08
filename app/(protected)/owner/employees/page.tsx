@@ -1,12 +1,18 @@
 import { notFound } from "next/navigation";
 
+import { CredentialControls } from "@/components/credential-controls";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { WaContactLink } from "@/components/wa-contact-link";
 import { listEmployees } from "@/db/queries";
+import { isCredentialVaultEnabled } from "@/lib/credential-crypto";
 import { requireOwner } from "@/src/features/auth/guards";
 
-import { setEmployeeActiveAction } from "./actions";
+import {
+  resetEmployeePasswordAction,
+  revealEmployeePasswordAction,
+  setEmployeeActiveAction,
+} from "./actions";
 import { AddEmployeeForm } from "./add-employee-form";
 import { PermissionsForm } from "./permissions-form";
 
@@ -16,6 +22,7 @@ export default async function OwnerEmployeesPage() {
   const user = await requireOwner();
   if (!user.gymId) notFound();
   const employees = await listEmployees(user.gymId);
+  const vaultEnabled = isCredentialVaultEnabled();
 
   return (
     <div className="flex flex-col gap-4">
@@ -63,8 +70,21 @@ export default async function OwnerEmployeesPage() {
                 </form>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex flex-col gap-4">
               <PermissionsForm employee={emp} />
+              <div className="border-t border-border pt-3">
+                <p className="mb-2 text-xs font-medium text-muted">
+                  Login credentials
+                </p>
+                <CredentialControls
+                  targetUserId={emp.userId}
+                  targetRole="employee"
+                  phone={emp.phone}
+                  vaultEnabled={vaultEnabled}
+                  revealAction={revealEmployeePasswordAction}
+                  resetAction={resetEmployeePasswordAction}
+                />
+              </div>
             </CardContent>
           </Card>
         ))

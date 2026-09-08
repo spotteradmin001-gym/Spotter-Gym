@@ -2,12 +2,19 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { CredentialControls } from "@/components/credential-controls";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
 import { WaContactLink } from "@/components/wa-contact-link";
 import { countGymUsersByRole, getGym, listGymUsers } from "@/db/queries";
+import { isCredentialVaultEnabled } from "@/lib/credential-crypto";
 
-import { setGymActiveAction, setUserActiveAction } from "../../actions";
+import {
+  resetOwnerPasswordAction,
+  revealOwnerPasswordAction,
+  setGymActiveAction,
+  setUserActiveAction,
+} from "../../actions";
 import { CreateOwnerForm } from "./create-owner-form";
 import { WahaSessionForm } from "./waha-session-form";
 
@@ -26,6 +33,7 @@ export default async function AdminGymDetailPage({
     countGymUsersByRole(gymId),
     listGymUsers(gymId, "owner"),
   ]);
+  const vaultEnabled = isCredentialVaultEnabled();
 
   return (
     <div className="flex flex-col gap-4">
@@ -82,6 +90,7 @@ export default async function AdminGymDetailPage({
                   <TH>Contact</TH>
                   <TH>Status</TH>
                   <TH>Last login</TH>
+                  <TH>Credentials</TH>
                   <TH />
                 </TR>
               </THead>
@@ -109,6 +118,17 @@ export default async function AdminGymDetailPage({
                       {owner.lastLoginAt
                         ? new Date(owner.lastLoginAt).toLocaleDateString()
                         : "—"}
+                    </TD>
+                    <TD>
+                      <CredentialControls
+                        targetUserId={owner.id}
+                        targetRole="owner"
+                        phone={owner.phone}
+                        vaultEnabled={vaultEnabled}
+                        revealAction={revealOwnerPasswordAction}
+                        resetAction={resetOwnerPasswordAction}
+                        extraFields={{ gymId }}
+                      />
                     </TD>
                     <TD className="text-right">
                       <form action={setUserActiveAction}>
