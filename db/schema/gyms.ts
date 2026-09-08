@@ -60,6 +60,14 @@ export const gyms = pgTable(
       .default(sql`'{0}'::smallint[]`),
     streakRewardPercent: integer("streak_reward_percent").notNull().default(0),
     streakAllowedMisses: integer("streak_allowed_misses").notNull().default(0),
+    // Paid WhatsApp promotions (Phase F / CR-10). `wahaDailyCap` is the total
+    // messages/day this gym's WhatsApp number may safely send (200 for a warmed
+    // number, ~40 for a fresh one). `transactionalReserve` is headroom held
+    // back for payment reminders + activation messages that promotions can
+    // never eat into. Promo budget for a day = cap - reserve - today's
+    // transactional sends. Both are admin-configurable only.
+    wahaDailyCap: integer("waha_daily_cap").notNull().default(200),
+    transactionalReserve: integer("transactional_reserve").notNull().default(60),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -76,6 +84,11 @@ export const gyms = pgTable(
     check(
       "gyms_streak_allowed_misses_check",
       sql`${t.streakAllowedMisses} between 0 and 31`,
+    ),
+    check("gyms_waha_daily_cap_check", sql`${t.wahaDailyCap} between 1 and 2000`),
+    check(
+      "gyms_transactional_reserve_check",
+      sql`${t.transactionalReserve} between 0 and 2000`,
     ),
   ],
 );

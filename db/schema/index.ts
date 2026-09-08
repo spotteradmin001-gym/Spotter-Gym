@@ -20,6 +20,8 @@ export * from "./members";
 export * from "./checkins";
 export * from "./dues";
 export * from "./streak-rewards";
+export * from "./promotions";
+export * from "./waha-send-log";
 export * from "./reminders";
 export * from "./payments";
 export * from "./employees";

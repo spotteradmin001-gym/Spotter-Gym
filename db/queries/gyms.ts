@@ -30,6 +30,8 @@ export type Gym = {
   closedWeekdays: number[];
   streakRewardPercent: number;
   streakAllowedMisses: number;
+  wahaDailyCap: number;
+  transactionalReserve: number;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -53,6 +55,8 @@ function mapGym(row: typeof gyms.$inferSelect): Gym {
     closedWeekdays: [...row.closedWeekdays].sort((a, b) => a - b),
     streakRewardPercent: row.streakRewardPercent,
     streakAllowedMisses: row.streakAllowedMisses,
+    wahaDailyCap: row.wahaDailyCap,
+    transactionalReserve: row.transactionalReserve,
     isActive: row.isActive,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -144,6 +148,8 @@ export type GymPatch = Partial<{
   reminderDaysBefore: number;
   streakRewardPercent: number;
   streakAllowedMisses: number;
+  wahaDailyCap: number;
+  transactionalReserve: number;
 }>;
 
 export async function updateGym(id: string, patch: GymPatch): Promise<Gym> {
@@ -220,6 +226,27 @@ export async function updateGym(id: string, patch: GymPatch): Promise<Gym> {
       throw new GymError("Allowed misses must be a whole number from 0 to 31.");
     }
     set.streakAllowedMisses = patch.streakAllowedMisses;
+  }
+
+  if (patch.wahaDailyCap !== undefined) {
+    if (
+      !Number.isInteger(patch.wahaDailyCap) ||
+      patch.wahaDailyCap < 1 ||
+      patch.wahaDailyCap > 2000
+    ) {
+      throw new GymError("Daily WhatsApp cap must be a whole number from 1 to 2000.");
+    }
+    set.wahaDailyCap = patch.wahaDailyCap;
+  }
+  if (patch.transactionalReserve !== undefined) {
+    if (
+      !Number.isInteger(patch.transactionalReserve) ||
+      patch.transactionalReserve < 0 ||
+      patch.transactionalReserve > 2000
+    ) {
+      throw new GymError("Transactional reserve must be a whole number from 0 to 2000.");
+    }
+    set.transactionalReserve = patch.transactionalReserve;
   }
 
   const [row] = await db
