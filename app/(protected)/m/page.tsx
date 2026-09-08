@@ -1,6 +1,13 @@
 import { DailyCheckinCelebration } from "@/components/checkin-celebration";
+import { TreasureChest, monthLabel } from "@/components/treasure-chest";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { closedDates, getGym, listRecentCheckins, memberStreak } from "@/db/queries";
+import {
+  closedDates,
+  getGym,
+  listRecentCheckins,
+  memberRewardOverview,
+  memberStreak,
+} from "@/db/queries";
 import { formatPaise } from "@/lib/money";
 import { pickQuote } from "@/lib/quotes";
 import { addDays, longestStreak } from "@/lib/streak";
@@ -16,11 +23,13 @@ export default async function MemberHomePage() {
   const today = new Date().toISOString().slice(0, 10);
   const month = today.slice(0, 7);
 
-  const [gym, streak, recent] = await Promise.all([
+  const [gym, streak, recent, reward] = await Promise.all([
     getGym(member.gymId),
     memberStreak(member.gymId, member.id),
     listRecentCheckins(member.gymId, member.id, 400),
+    memberRewardOverview(member.gymId, member.id),
   ]);
+  const pendingCredits = reward.rewards.filter((r) => r.status === "earned");
 
   const checkinDates = recent.map((c) => c.date);
   const earliest = checkinDates.length
@@ -83,6 +92,36 @@ export default async function MemberHomePage() {
           )}
         </CardContent>
       </Card>
+
+      {reward.chest.state !== "off" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Attendance reward</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <TreasureChest
+              state={reward.chest.state}
+              redeemPeriod={reward.chest.redeemPeriod}
+              percent={reward.chest.percent}
+            />
+            {pendingCredits.length > 0 && (
+              <ul className="flex flex-col gap-1 border-t border-border pt-3 text-sm">
+                {pendingCredits.map((r) => (
+                  <li key={r.id}>
+                    <span className="text-success">
+                      {r.percent}% credit
+                    </span>{" "}
+                    <span className="text-muted">
+                      towards your {monthLabel(r.redeemPeriod) ?? r.redeemPeriod}{" "}
+                      payment
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

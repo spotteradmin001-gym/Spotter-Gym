@@ -7,6 +7,10 @@ import { dues, gyms, members } from "@/db/schema";
 import { duePeriodsFor } from "@/lib/billing";
 
 import { resolveFeePaise } from "./members";
+import {
+  applyDueStreakDiscounts,
+  evaluateStreakRewardsForGym,
+} from "./streak-rewards";
 
 export type DueStatus = "pending" | "paid" | "waived";
 
@@ -39,6 +43,10 @@ function mapDue(row: typeof dues.$inferSelect): Due {
  * active member of a gym. Idempotent (unique on member+period), skips inactive
  * members, never prorates a partial first month. Returns how many rows were
  * created.
+ *
+ * After generation it scores the just-closed billing cycle for the streak
+ * reward (CR-9 / 9d) and applies any pending N+2 credit to the dues that now
+ * exist. Both steps are inert when `gyms.streak_reward_percent = 0`.
  */
 export async function generateDuesForGym(
   gymId: string,
@@ -82,13 +90,17 @@ export async function generateDuesForGym(
     }
   }
 
-  if (rows.length === 0) return { created: 0 };
+  const inserted =
+    rows.length === 0
+      ? []
+      : await db
+          .insert(dues)
+          .values(rows)
+          .onConflictDoNothing({ target: [dues.memberId, dues.periodMonth] })
+          .returning({ id: dues.id });
 
-  const inserted = await db
-    .insert(dues)
-    .values(rows)
-    .onConflictDoNothing({ target: [dues.memberId, dues.periodMonth] })
-    .returning({ id: dues.id });
+  await evaluateStreakRewardsForGym(gymId, asOf);
+  await applyDueStreakDiscounts(gymId);
 
   return { created: inserted.length };
 }

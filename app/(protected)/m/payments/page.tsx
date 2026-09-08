@@ -1,6 +1,12 @@
+import { monthLabel } from "@/components/treasure-chest";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
-import { listDuesForMember, listPayments, summariseMemberDues } from "@/db/queries";
+import {
+  listDuesForMember,
+  listPayments,
+  listStreakRewardsForMember,
+  summariseMemberDues,
+} from "@/db/queries";
 import { formatPaise } from "@/lib/money";
 import { requireCompleteProfile } from "@/src/features/auth/member-scope";
 
@@ -8,11 +14,13 @@ export const dynamic = "force-dynamic";
 
 export default async function MemberPaymentsPage() {
   const { member } = await requireCompleteProfile();
-  const [dues, payments] = await Promise.all([
+  const [dues, payments, rewards] = await Promise.all([
     listDuesForMember(member.gymId, member.id),
     listPayments(member.gymId, { memberId: member.id }),
+    listStreakRewardsForMember(member.gymId, member.id),
   ]);
   const overview = summariseMemberDues(dues);
+  const credits = rewards.filter((r) => r.status !== "missed");
 
   return (
     <div className="flex flex-col gap-4">
@@ -36,6 +44,25 @@ export default async function MemberPaymentsPage() {
           )}
         </CardContent>
       </Card>
+
+      {credits.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Streak rewards</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-1 text-sm">
+            {credits.map((r) => (
+              <p key={r.id}>
+                <span className="text-success">{r.percent}% off</span>{" "}
+                <span className="text-muted">
+                  your {monthLabel(r.redeemPeriod) ?? r.redeemPeriod} payment —{" "}
+                  {r.status === "applied" ? "applied" : "pending"}
+                </span>
+              </p>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

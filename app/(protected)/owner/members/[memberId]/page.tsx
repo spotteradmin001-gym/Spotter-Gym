@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CredentialControls } from "@/components/credential-controls";
+import { monthLabel } from "@/components/treasure-chest";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
@@ -13,6 +14,7 @@ import {
   listProfileFields,
   listRecentCheckins,
   listReminderJobs,
+  listStreakRewardsForMember,
 } from "@/db/queries";
 import { formatPaise } from "@/lib/money";
 import { requireOwner } from "@/src/features/auth/guards";
@@ -34,15 +36,23 @@ export default async function OwnerMemberDetailPage({
   if (!user.gymId) notFound();
   const { memberId } = await params;
 
-  const [member, fields, memberDues, memberPayments, checkins, reminders] =
-    await Promise.all([
-      getMember(user.gymId, memberId),
-      listProfileFields(user.gymId),
-      listDuesForMember(user.gymId, memberId),
-      listPayments(user.gymId, { memberId }),
-      listRecentCheckins(user.gymId, memberId, 20),
-      listReminderJobs(user.gymId, { memberId, limit: 20 }),
-    ]);
+  const [
+    member,
+    fields,
+    memberDues,
+    memberPayments,
+    checkins,
+    reminders,
+    streakRewards,
+  ] = await Promise.all([
+    getMember(user.gymId, memberId),
+    listProfileFields(user.gymId),
+    listDuesForMember(user.gymId, memberId),
+    listPayments(user.gymId, { memberId }),
+    listRecentCheckins(user.gymId, memberId, 20),
+    listReminderJobs(user.gymId, { memberId, limit: 20 }),
+    listStreakRewardsForMember(user.gymId, memberId),
+  ]);
   if (!member) notFound();
 
   const today = new Date().toISOString().slice(0, 10);
@@ -184,6 +194,51 @@ export default async function OwnerMemberDetailPage({
           )}
         </CardContent>
       </Card>
+
+      {streakRewards.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Streak rewards</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table variant="stacked">
+              <THead>
+                <TR>
+                  <TH>Earned cycle</TH>
+                  <TH>Discount</TH>
+                  <TH>Applies to</TH>
+                  <TH>Status</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {streakRewards.map((r) => (
+                  <TR key={r.id}>
+                    <TD label="Earned cycle">
+                      {monthLabel(r.earnedPeriod) ?? r.earnedPeriod}
+                    </TD>
+                    <TD label="Discount">{r.percent}% off</TD>
+                    <TD label="Applies to">
+                      {monthLabel(r.redeemPeriod) ?? r.redeemPeriod}
+                    </TD>
+                    <TD
+                      label="Status"
+                      className={
+                        r.status === "missed"
+                          ? "text-muted"
+                          : r.status === "applied"
+                            ? "text-success"
+                            : ""
+                      }
+                    >
+                      {r.status}
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

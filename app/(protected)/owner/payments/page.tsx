@@ -1,9 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { monthLabel } from "@/components/treasure-chest";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
-import { listMembers, listPayments, paymentsSummary } from "@/db/queries";
+import {
+  listMembers,
+  listPayments,
+  listPendingStreakRewardsForGym,
+  paymentsSummary,
+} from "@/db/queries";
 import type { RangeKind } from "@/lib/billing";
 import { formatPaise } from "@/lib/money";
 import { requireOwner } from "@/src/features/auth/guards";
@@ -29,10 +35,11 @@ export default async function OwnerPaymentsPage({
   const range: RangeKind =
     period === "quarter" || period === "year" ? period : "month";
 
-  const [summary, list, members] = await Promise.all([
+  const [summary, list, members, pendingRewards] = await Promise.all([
     paymentsSummary(user.gymId, { period: range }),
     listPayments(user.gymId, { period: range }),
     listMembers(user.gymId, { status: "active" }),
+    listPendingStreakRewardsForGym(user.gymId),
   ]);
   const today = new Date().toISOString().slice(0, 10);
 
@@ -76,6 +83,43 @@ export default async function OwnerPaymentsPage({
           <Stat label="Due today" value={formatPaise(summary.dueTodayPaise)} />
         </CardContent>
       </Card>
+
+      {pendingRewards.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Streak rewards pending ({pendingRewards.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table variant="stacked">
+              <THead>
+                <TR>
+                  <TH>Member</TH>
+                  <TH>Discount</TH>
+                  <TH>Applies to</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {pendingRewards.map((r) => (
+                  <TR key={r.id}>
+                    <TD label="Member">
+                      <Link
+                        href={`/owner/members/${r.memberId}`}
+                        className="text-primary hover:underline"
+                      >
+                        {r.memberName}
+                      </Link>
+                    </TD>
+                    <TD label="Discount">{r.percent}% off</TD>
+                    <TD label="Applies to">
+                      {monthLabel(r.redeemPeriod) ?? r.redeemPeriod}
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
