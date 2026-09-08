@@ -1,6 +1,8 @@
+import { DailyCheckinCelebration } from "@/components/checkin-celebration";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { closedDates, getGym, listRecentCheckins, memberStreak } from "@/db/queries";
 import { formatPaise } from "@/lib/money";
+import { pickQuote } from "@/lib/quotes";
 import { addDays, longestStreak } from "@/lib/streak";
 import { buildMonthGrid } from "@/lib/streak-calendar";
 import { requireCompleteProfile } from "@/src/features/auth/member-scope";
@@ -32,9 +34,18 @@ export default async function MemberHomePage() {
 
   const grid = buildMonthGrid({ month, today, checkins: checkinDates, closed });
   const best = longestStreak({ checkins: checkinDates, closed, today });
+  const checkedInToday = checkinDates.includes(today);
 
   return (
     <div className="flex flex-col gap-4">
+      {checkedInToday && (
+        <DailyCheckinCelebration
+          streak={streak}
+          quote={pickQuote(today)}
+          date={today}
+        />
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Hi {member.name.split(" ")[0]}</CardTitle>

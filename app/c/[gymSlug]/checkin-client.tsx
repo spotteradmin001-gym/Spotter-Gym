@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { CheckinCelebration } from "@/components/checkin-celebration";
 import { Button } from "@/components/ui/button";
+import { pickQuote } from "@/lib/quotes";
 
 type Phase = "locating" | "sending" | "ok" | "already" | "error" | "denied";
 
@@ -18,6 +20,9 @@ export function CheckinClient({
   const [streak, setStreak] = useState<number | null>(null);
   const [attempt, setAttempt] = useState(0);
   const started = useRef(-1);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const quote = useMemo(() => pickQuote(today), [today]);
 
   const start = useCallback(() => {
     if (!navigator.geolocation) {
@@ -77,20 +82,20 @@ export function CheckinClient({
       {phase === "locating" && <p>Getting your location…</p>}
       {phase === "sending" && <p>Checking you in…</p>}
       {phase === "ok" && (
-        <>
-          <p className="text-lg font-semibold text-success">Checked in ✓</p>
-          {streak != null && (
-            <p className="text-sm">Streak: {streak} day{streak === 1 ? "" : "s"}</p>
-          )}
-        </>
+        <CheckinCelebration
+          streak={streak}
+          quote={quote}
+          tone="fresh"
+          seenKey={today}
+        />
       )}
       {phase === "already" && (
-        <>
-          <p className="text-lg font-semibold">Already checked in today</p>
-          {streak != null && (
-            <p className="text-sm">Streak: {streak} day{streak === 1 ? "" : "s"}</p>
-          )}
-        </>
+        <CheckinCelebration
+          streak={streak}
+          quote={quote}
+          tone="repeat"
+          seenKey={today}
+        />
       )}
       {(phase === "error" || phase === "denied") && (
         <>
