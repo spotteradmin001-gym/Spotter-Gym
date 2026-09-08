@@ -5,7 +5,9 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { checkins, gyms, members } from "@/db/schema";
 import { haversineMetres } from "@/lib/haversine";
-import { currentStreak } from "@/lib/streak";
+import { addDays, currentStreak } from "@/lib/streak";
+
+import { closedDates } from "./schedule";
 
 export class CheckinError extends Error {
   constructor(message: string) {
@@ -90,21 +92,41 @@ export async function recordCheckin(input: {
   };
 }
 
+/**
+ * The member's current rest-day-aware streak. Feeds `currentStreak` the gym's
+ * closed dates (weekly closed weekdays + one-off holidays) and its per-cycle
+ * `streak_allowed_misses` buffer, so a closed day never breaks the run and up
+ * to `buffer` missed open days are forgiven (CR-9 / 9c).
+ */
 export async function memberStreak(
   gymId: string,
   memberId: string,
   asOf: Date = new Date(),
 ): Promise<number> {
-  const rows = await db
-    .select({ d: checkins.checkinDate })
-    .from(checkins)
-    .where(and(eq(checkins.gymId, gymId), eq(checkins.memberId, memberId)))
-    .orderBy(desc(checkins.checkinDate))
-    .limit(400);
-  return currentStreak(
-    rows.map((r) => r.d),
-    asOf.toISOString().slice(0, 10),
-  );
+  const today = asOf.toISOString().slice(0, 10);
+
+  const [rows, [gym]] = await Promise.all([
+    db
+      .select({ d: checkins.checkinDate })
+      .from(checkins)
+      .where(and(eq(checkins.gymId, gymId), eq(checkins.memberId, memberId)))
+      .orderBy(desc(checkins.checkinDate))
+      .limit(400),
+    db
+      .select({ allowedMisses: gyms.streakAllowedMisses })
+      .from(gyms)
+      .where(eq(gyms.id, gymId))
+      .limit(1),
+  ]);
+
+  const closed = await closedDates(gymId, addDays(today, -400), today);
+
+  return currentStreak({
+    checkins: rows.map((r) => r.d),
+    closed,
+    today,
+    allowedMisses: gym?.allowedMisses ?? 0,
+  });
 }
 
 export async function listRecentCheckins(
