@@ -16,6 +16,7 @@ import { addExpense, updateExpense } from "./expenses";
 import { storeTempCredential } from "./temp-credentials";
 import { createMember, updateMember } from "./members";
 import { recordPayment } from "./payments";
+import { submitPromotion } from "./promotions";
 import { setUserActive } from "./users";
 
 export { EMPLOYEE_PERMISSIONS, PERMISSION_LABELS } from "@/lib/permissions";
@@ -426,6 +427,11 @@ async function applyRequestedAction(
         amountPaise: n("amountPaise"),
         incurredOn: s("incurredOn") || undefined,
       });
+      return;
+    case "promotion.create":
+      // The employee's draft (with recipients + any image) already exists; the
+      // owner's approval just moves it into the admin queue.
+      await submitPromotion({ gymId, promotionId: s("promotionId") });
       return;
     default:
       throw new EmployeeError("That action can't be approved yet.");

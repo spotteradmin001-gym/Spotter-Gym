@@ -2,7 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 
-import { EmployeeError, decidePermissionRequest, writeAudit } from "@/db/queries";
+import {
+  EmployeeError,
+  PromotionError,
+  decidePermissionRequest,
+  writeAudit,
+} from "@/db/queries";
 import { requireOwnerGym } from "@/src/features/auth/owner-scope";
 
 export async function decideRequestAction(formData: FormData): Promise<void> {
@@ -24,10 +29,13 @@ export async function decideRequestAction(formData: FormData): Promise<void> {
       targetId: id,
     });
   } catch (error) {
-    if (!(error instanceof EmployeeError)) throw error;
-    // already decided elsewhere — fall through to revalidate
+    if (!(error instanceof EmployeeError) && !(error instanceof PromotionError)) {
+      throw error;
+    }
+    // already decided / already submitted elsewhere — fall through to revalidate
   }
   revalidatePath("/owner/approvals");
   revalidatePath("/owner/members");
   revalidatePath("/owner/payments");
+  revalidatePath("/owner/promotions");
 }

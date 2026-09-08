@@ -1,0 +1,4 @@
+ALTER TABLE "employee_permissions" DROP CONSTRAINT "employee_permissions_permission_check";--> statement-breakpoint
+ALTER TABLE "permission_requests" DROP CONSTRAINT "permission_requests_action_check";--> statement-breakpoint
+ALTER TABLE "employee_permissions" ADD CONSTRAINT "employee_permissions_permission_check" CHECK ("employee_permissions"."permission" in ('member.create', 'member.edit', 'payment.record', 'expense.create', 'expense.edit', 'promotion.create'));--> statement-breakpoint
+ALTER TABLE "permission_requests" ADD CONSTRAINT "permission_requests_action_check" CHECK ("permission_requests"."action_type" in ('member.create', 'member.edit', 'payment.record', 'expense.create', 'expense.edit', 'promotion.create'));

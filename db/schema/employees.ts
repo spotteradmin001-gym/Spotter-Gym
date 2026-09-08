@@ -59,7 +59,7 @@ export const employeePermissions = pgTable(
     unique("employee_permissions_unique").on(t.employeeId, t.permission),
     check(
       "employee_permissions_permission_check",
-      sql`${t.permission} in ('member.create', 'member.edit', 'payment.record', 'expense.create', 'expense.edit')`,
+      sql`${t.permission} in ('member.create', 'member.edit', 'payment.record', 'expense.create', 'expense.edit', 'promotion.create')`,
     ),
   ],
 );
@@ -95,7 +95,7 @@ export const permissionRequests = pgTable(
     ),
     check(
       "permission_requests_action_check",
-      sql`${t.actionType} in ('member.create', 'member.edit', 'payment.record', 'expense.create', 'expense.edit')`,
+      sql`${t.actionType} in ('member.create', 'member.edit', 'payment.record', 'expense.create', 'expense.edit', 'promotion.create')`,
     ),
     index("permission_requests_gym_status_idx").on(t.gymId, t.status),
   ],
