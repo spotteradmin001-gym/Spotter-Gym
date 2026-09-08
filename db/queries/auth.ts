@@ -6,6 +6,10 @@ import { and, eq, gt } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { passwordResetTokens, sessions, users } from "@/db/schema";
+// Sibling query module. Only referenced inside function bodies below, and
+// temp-credentials.ts imports only types + `AuthError` back from here, so the
+// ESM cycle never touches either module's top-level evaluation.
+import { purgeTempCredential } from "./temp-credentials";
 import {
   generatePassword,
   hashPassword,
@@ -255,6 +259,8 @@ export async function changeOwnPassword(input: {
     })
     .where(eq(users.id, input.userId));
   await db.delete(sessions).where(eq(sessions.userId, input.userId));
+  // The account holder picked their own password — drop the retrievable copy.
+  await purgeTempCredential(input.userId);
 }
 
 /** Logout — revokes exactly this one session. */
@@ -342,6 +348,8 @@ export async function resetPasswordWithToken(
     .set({ usedAt: new Date() })
     .where(eq(passwordResetTokens.id, row.id));
   await db.delete(sessions).where(eq(sessions.userId, row.userId));
+  // A new password is set — the old retrievable copy no longer applies.
+  await purgeTempCredential(row.userId);
 }
 
 /**
