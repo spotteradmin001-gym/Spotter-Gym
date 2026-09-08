@@ -66,7 +66,7 @@ export default async function OwnerRemindersPage({
           {jobs.length === 0 ? (
             <p className="p-4 text-sm text-muted">Nothing here.</p>
           ) : (
-            <Table>
+            <Table variant="stacked">
               <THead>
                 <TR>
                   <TH>Scheduled</TH>
@@ -80,8 +80,8 @@ export default async function OwnerRemindersPage({
               <TBody>
                 {jobs.map((j) => (
                   <TR key={j.id}>
-                    <TD>{j.scheduledFor}</TD>
-                    <TD>
+                    <TD label="Scheduled">{j.scheduledFor}</TD>
+                    <TD label="Member">
                       <Link
                         href={`/owner/members/${j.memberId}`}
                         className="text-primary hover:underline"
@@ -89,12 +89,12 @@ export default async function OwnerRemindersPage({
                         {j.memberName}
                       </Link>
                     </TD>
-                    <TD>{j.kind}</TD>
-                    <TD className={j.status === "failed" ? "text-destructive" : j.status === "sent" ? "text-success" : ""}>
+                    <TD label="Kind">{j.kind}</TD>
+                    <TD label="Status" className={j.status === "failed" ? "text-destructive" : j.status === "sent" ? "text-success" : ""}>
                       {j.status}
                       {j.attempts > 0 && ` (${j.attempts})`}
                     </TD>
-                    <TD className="text-muted">
+                    <TD label="Sent / error" className="text-muted">
                       {j.sentAt
                         ? new Date(j.sentAt).toLocaleString()
                         : j.error ?? "—"}

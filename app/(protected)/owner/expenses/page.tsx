@@ -66,7 +66,7 @@ export default async function OwnerExpensesPage({
       </Card>
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between">
+        <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
           <CardTitle>Recurring</CardTitle>
           <form action={materializeExpensesAction}>
             <Button type="submit" variant="ghost" size="sm">
@@ -76,7 +76,7 @@ export default async function OwnerExpensesPage({
         </CardHeader>
         <CardContent className="flex flex-col gap-4 p-4">
           {recurring.length > 0 && (
-            <Table>
+            <Table variant="stacked">
               <THead>
                 <TR>
                   <TH>Label</TH>
@@ -91,12 +91,12 @@ export default async function OwnerExpensesPage({
               <TBody>
                 {recurring.map((r) => (
                   <TR key={r.id}>
-                    <TD>{r.label}</TD>
-                    <TD>{formatPaise(r.amountPaise)}</TD>
-                    <TD>{r.dayOfMonth}</TD>
-                    <TD>{r.categoryName ?? "—"}</TD>
-                    <TD>{r.linkedEmployeeName ?? "—"}</TD>
-                    <TD>
+                    <TD label="Label">{r.label}</TD>
+                    <TD label="Amount">{formatPaise(r.amountPaise)}</TD>
+                    <TD label="Day">{r.dayOfMonth}</TD>
+                    <TD label="Category">{r.categoryName ?? "—"}</TD>
+                    <TD label="Employee">{r.linkedEmployeeName ?? "—"}</TD>
+                    <TD label="Active">
                       <form action={setRecurringActiveAction}>
                         <input type="hidden" name="id" value={r.id} />
                         <input type="hidden" name="isActive" value={String(!r.isActive)} />
@@ -143,7 +143,7 @@ export default async function OwnerExpensesPage({
           {list.length === 0 ? (
             <p className="text-sm text-muted">No expenses in this period.</p>
           ) : (
-            <Table>
+            <Table variant="stacked">
               <THead>
                 <TR>
                   <TH>Date</TH>
@@ -156,15 +156,15 @@ export default async function OwnerExpensesPage({
               <TBody>
                 {list.map((x) => (
                   <TR key={x.id}>
-                    <TD>{x.incurredOn}</TD>
-                    <TD>
+                    <TD label="Date">{x.incurredOn}</TD>
+                    <TD label="Label">
                       {x.label}
                       {x.recurring && (
                         <span className="ml-1 text-xs text-muted">(recurring)</span>
                       )}
                     </TD>
-                    <TD>{x.categoryName ?? "—"}</TD>
-                    <TD>{formatPaise(x.amountPaise)}</TD>
+                    <TD label="Category">{x.categoryName ?? "—"}</TD>
+                    <TD label="Amount">{formatPaise(x.amountPaise)}</TD>
                     <TD className="text-right">
                       {!x.recurring && (
                         <form action={deleteExpenseAction}>

@@ -36,7 +36,7 @@ export default async function OwnerApprovalsPage() {
               key={req.id}
               className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border p-3 text-sm"
             >
-              <div>
+              <div className="min-w-0">
                 <p className="font-medium">
                   {ACTION_LABEL[req.actionType] ?? req.actionType}
                 </p>
@@ -44,7 +44,7 @@ export default async function OwnerApprovalsPage() {
                   {req.employeeName} ·{" "}
                   {new Date(req.createdAt).toLocaleString()}
                 </p>
-                <pre className="mt-1 max-w-lg overflow-x-auto rounded bg-muted-background p-2 text-xs">
+                <pre className="mt-1 max-w-full overflow-x-auto rounded bg-muted-background p-2 text-xs sm:max-w-lg">
                   {JSON.stringify(req.payload, null, 2)}
                 </pre>
               </div>
