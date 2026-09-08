@@ -17,6 +17,7 @@ export * from "./config";
 export * from "./members";
 export * from "./checkins";
 export * from "./dues";
+export * from "./reminders";
 export * from "./payments";
 export * from "./employees";
 export * from "./expenses";
