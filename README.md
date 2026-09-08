@@ -1,36 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Spotter
 
-## Getting Started
+A multi-tenant gym SaaS: memberships, monthly dues, payments, expenses, P&L,
+location-locked QR attendance, and WhatsApp payment reminders.
 
-First, run the development server:
+## Roles
+
+| Role | Where | Does |
+|---|---|---|
+| **Admin** | `/admin` | Creates gyms and owner logins; can drill into any gym. |
+| **Owner** | `/owner` | Full control of one gym: overview, members, dues, payments, expenses, P&L, employees + granular permissions, reminder templates, check-in QR, activity log, settings. |
+| **Employee** | `/employee` | Only the actions the owner granted. Approval-gated actions queue for the owner instead of writing. |
+| **Member** | `/m` | Completes their profile, sees dues + payments + streak, and does a location-locked QR check-in at `/c/<gym-slug>`. |
+
+## Stack
+
+- **Next.js 16** (App Router, React 19, Tailwind v4) on **Vercel**
+- **Drizzle ORM + `pg`** against **Neon Postgres** — pooled URL for the app,
+  unpooled for migrations
+- Auth built from scratch: scrypt password hashing, DB-backed sessions
+  (httpOnly cookie, 30 days), `must_change_password` first-login flow,
+  `require-<role>` guards, a forgot-password email flow. **No 2FA.**
+- **WhatsApp reminders** are split: the app *plans* them (writes
+  `reminder_jobs`); a local script *sends* them via a laptop-hosted
+  [WAHA](https://waha.devlike.pro/) — see [`engine/`](./engine/README.md).
+
+## Local setup
 
 ```bash
+nvm use                      # Node 24 (.nvmrc)
+npm install
+vercel env pull .env.local   # DATABASE_URL(_UNPOOLED), SESSION_SECRET, …
+npm run db:migrate           # apply migrations to the branch in .env.local
+npm run db:seed-admin        # initial admin login
+npm run db:seed-dev          # optional: one fully-populated "Demo Gym"
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`db:seed-dev` prints demo logins (owner + member) and refuses to run with
+`NODE_ENV=production`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| | |
+|---|---|
+| `npm run dev` / `build` / `start` | Next.js |
+| `npm run typecheck` | `next typegen && tsc --noEmit` |
+| `npm run lint` | eslint |
+| `npm test` | vitest (unit + integration; `db/**` suites hit the Neon branch in `DATABASE_URL` and self-skip when it's unset) |
+| `npm run db:generate` | drizzle-kit — generate a migration from schema changes |
+| `npm run db:migrate` | apply pending migrations (unpooled URL) |
+| `npm run db:seed-admin` | create / confirm the initial admin |
+| `npm run db:seed-dev` | rebuild the demo gym |
 
-## Learn More
+## Layout
 
-To learn more about Next.js, take a look at the following resources:
+```
+app/                    routes — (protected)/{admin,owner,employee,m}, /c, /activate, /api
+db/schema/              Drizzle tables, one file per area
+db/queries/             all DB access, one file per area, server-only
+db/migrations/          generated SQL — never hand-edited
+src/features/auth/      password, session, guards, scopes, rate-limit
+src/features/checkin/   rotating QR token
+lib/                    pure helpers (money, phone, billing, streak, template, …)
+engine/                 the local WhatsApp sender (not deployed)
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Build discipline
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Work phase → batch → task; each batch is a PR, green on
+  typecheck + lint + test + build + a Vercel preview.
+- Migrations are generated last, just before the PR, and applied to the DB
+  **before** the merge.
+- Preview deployments use a dedicated Neon `preview` branch — they never touch
+  production data.
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See [`HANDOFF.md`](./HANDOFF.md) for the operational details (env vars, crons,
+production migration steps, the reminder engine).

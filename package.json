@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx db/migrate.ts",
-    "db:seed-admin": "tsx db/seed-admin.ts"
+    "db:seed-admin": "tsx db/seed-admin.ts",
+    "db:seed-dev": "tsx --conditions=react-server db/seed-dev.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
