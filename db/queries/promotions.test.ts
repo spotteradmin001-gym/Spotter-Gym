@@ -1,0 +1,185 @@
+/**
+ * Integration test for db/queries/promotions.ts against the Neon `preview`
+ * branch. Skipped when DATABASE_URL is unset.
+ *
+ * FIND-MY-FIXTURE: every gym this file makes is named `test_promo %`; cleanup
+ * deletes promotions/recipients by gym id and gyms/members by that prefix.
+ */
+import { eq, like } from "drizzle-orm";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+const dbSuite = process.env.DATABASE_URL ? describe : describe.skip;
+
+import { closeDb, db } from "@/db/client";
+import { gyms, members, promotionRecipients, promotions } from "@/db/schema";
+
+import { createGym } from "./gyms";
+import { createMember } from "./members";
+import {
+  PromotionError,
+  createPromotionDraft,
+  getPromotion,
+  getPromotionForGym,
+  listPromotionRecipients,
+  listPromotionsByStatus,
+  listPromotionsForGym,
+  replacePromotionRecipients,
+} from "./promotions";
+
+let gymId = "";
+let otherGymId = "";
+let memberId = "";
+const createdGymIds: string[] = [];
+
+if (process.env.DATABASE_URL) {
+  beforeAll(async () => {
+    gymId = (await createGym({ name: "test_promo Main" })).id;
+    otherGymId = (await createGym({ name: "test_promo Other" })).id;
+    createdGymIds.push(gymId, otherGymId);
+    memberId = (
+      await createMember({
+        gymId,
+        name: "test_promo Member",
+        phone: "9800000001",
+        joinDate: "2026-01-01",
+      })
+    ).id;
+  });
+  afterAll(async () => {
+    for (const id of createdGymIds) {
+      const promoRows = await db
+        .select({ id: promotions.id })
+        .from(promotions)
+        .where(eq(promotions.gymId, id));
+      for (const p of promoRows) {
+        await db
+          .delete(promotionRecipients)
+          .where(eq(promotionRecipients.promotionId, p.id));
+      }
+      await db.delete(promotions).where(eq(promotions.gymId, id));
+    }
+    await db.delete(members).where(like(members.name, "test_promo %"));
+    await db.delete(gyms).where(like(gyms.name, "test_promo %"));
+    await closeDb();
+  });
+}
+
+dbSuite("createPromotionDraft", () => {
+  it("derives the part flags from the content — text only", async () => {
+    const p = await createPromotionDraft({ gymId, body: "  New Year offer  " });
+    expect(p.status).toBe("draft");
+    expect(p.settlement).toBe("none");
+    expect(p.hasText).toBe(true);
+    expect(p.hasImage).toBe(false);
+    expect(p.body).toBe("New Year offer");
+    expect(p.recipientCount).toBe(0);
+    expect(p.perMessagePaise).toBeNull();
+  });
+
+  it("derives the part flags — image only, and drops mime with no image", async () => {
+    const img = await createPromotionDraft({
+      gymId,
+      imageDriveFileId: "drive-file-1",
+      imageMime: "image/jpeg",
+    });
+    expect(img.hasText).toBe(false);
+    expect(img.hasImage).toBe(true);
+    expect(img.imageMime).toBe("image/jpeg");
+
+    const textOnly = await createPromotionDraft({
+      gymId,
+      body: "hi",
+      imageMime: "image/png",
+    });
+    expect(textOnly.imageMime).toBeNull();
+  });
+
+  it("rejects a promotion with neither a message nor an image", async () => {
+    await expect(createPromotionDraft({ gymId })).rejects.toBeInstanceOf(
+      PromotionError,
+    );
+  });
+});
+
+dbSuite("lookup + listing", () => {
+  it("getPromotionForGym is gym-scoped", async () => {
+    const p = await createPromotionDraft({ gymId, body: "scoped" });
+    expect((await getPromotion(p.id))?.id).toBe(p.id);
+    expect((await getPromotionForGym(gymId, p.id))?.id).toBe(p.id);
+    expect(await getPromotionForGym(otherGymId, p.id)).toBeNull();
+  });
+
+  it("listPromotionsForGym only returns that gym's rows, newest first", async () => {
+    await createPromotionDraft({ gymId, body: "a" });
+    await createPromotionDraft({ gymId, body: "b" });
+    const mine = await listPromotionsForGym(gymId);
+    const other = await listPromotionsForGym(otherGymId);
+    expect(mine.every((p) => p.gymId === gymId)).toBe(true);
+    expect(other.every((p) => p.gymId === otherGymId)).toBe(true);
+    const times = mine.map((p) => p.createdAt);
+    expect([...times].sort((x, y) => (x < y ? 1 : -1))).toEqual(times);
+  });
+
+  it("listPromotionsByStatus filters across gyms", async () => {
+    const drafts = await listPromotionsByStatus("draft");
+    expect(drafts.some((p) => p.gymId === gymId)).toBe(true);
+    expect(await listPromotionsByStatus([])).toEqual([]);
+    expect(await listPromotionsByStatus("sent")).toEqual(
+      expect.not.arrayContaining([expect.objectContaining({ gymId })]),
+    );
+  });
+});
+
+dbSuite("replacePromotionRecipients", () => {
+  it("dedupes by phone, sets recipient_count, and marks absent parts n/a", async () => {
+    const p = await createPromotionDraft({ gymId, body: "text only promo" });
+    const n = await replacePromotionRecipients(p.id, [
+      { phone: "+919800000001", memberId, source: "member" },
+      { phone: "+919800000002", source: "contact" },
+      { phone: "+919800000002", source: "contact" }, // dupe dropped
+      { phone: "  ", source: "contact" }, // blank dropped
+    ]);
+    expect(n).toBe(2);
+
+    const after = await getPromotion(p.id);
+    expect(after?.recipientCount).toBe(2);
+
+    const recips = await listPromotionRecipients(p.id);
+    expect(recips).toHaveLength(2);
+    expect(recips.every((r) => r.textStatus === "pending")).toBe(true);
+    expect(recips.every((r) => r.imageStatus === "n/a")).toBe(true);
+    expect(recips.every((r) => r.attempts === 0)).toBe(true);
+    expect(recips.find((r) => r.phone === "+919800000001")?.source).toBe("member");
+    expect(recips.find((r) => r.phone === "+919800000001")?.memberId).toBe(memberId);
+  });
+
+  it("replaces the list wholesale on a second call", async () => {
+    const p = await createPromotionDraft({
+      gymId,
+      imageDriveFileId: "drive-file-2",
+      imageMime: "image/png",
+    });
+    await replacePromotionRecipients(p.id, [
+      { phone: "+919811111111", source: "contact" },
+    ]);
+    await replacePromotionRecipients(p.id, [
+      { phone: "+919822222222", source: "contact" },
+      { phone: "+919833333333", source: "contact" },
+    ]);
+    const recips = await listPromotionRecipients(p.id);
+    expect(recips.map((r) => r.phone).sort()).toEqual([
+      "+919822222222",
+      "+919833333333",
+    ]);
+    // image-only promotion → text part is n/a, image part pending
+    expect(recips.every((r) => r.textStatus === "n/a")).toBe(true);
+    expect(recips.every((r) => r.imageStatus === "pending")).toBe(true);
+    expect((await getPromotion(p.id))?.recipientCount).toBe(2);
+  });
+
+  it("throws for an unknown promotion", async () => {
+    await expect(
+      replacePromotionRecipients("00000000-0000-0000-0000-000000000000", []),
+    ).rejects.toBeInstanceOf(PromotionError);
+  });
+});

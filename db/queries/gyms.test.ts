@@ -51,6 +51,12 @@ dbSuite("createGym", () => {
     expect(gym.wahaSessionName).toBe(gym.slug);
   });
 
+  it("defaults the promotions send cap and transactional reserve", async () => {
+    const gym = await createGym({ name: "test_gym Promo Defaults" });
+    expect(gym.wahaDailyCap).toBe(200);
+    expect(gym.transactionalReserve).toBe(60);
+  });
+
   it("keeps an explicit WAHA session name", async () => {
     const gym = await createGym({
       name: "test_gym Named Session",
@@ -114,6 +120,21 @@ dbSuite("updateGym", () => {
     await expect(
       updateGym(gym.id, { defaultMonthlyFeePaise: -1 }),
     ).rejects.toThrow(/paise/);
+  });
+
+  it("applies and validates the promotions send cap + reserve", async () => {
+    const gym = await createGym({ name: "test_gym Promo Cap" });
+    const updated = await updateGym(gym.id, {
+      wahaDailyCap: 40,
+      transactionalReserve: 20,
+    });
+    expect(updated.wahaDailyCap).toBe(40);
+    expect(updated.transactionalReserve).toBe(20);
+
+    await expect(updateGym(gym.id, { wahaDailyCap: 0 })).rejects.toThrow(/cap/);
+    await expect(
+      updateGym(gym.id, { transactionalReserve: -1 }),
+    ).rejects.toThrow(/reserve/);
   });
 
   it("throws for an unknown gym", async () => {
