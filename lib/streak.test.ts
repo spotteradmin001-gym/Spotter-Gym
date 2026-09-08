@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { addDays, currentStreak } from "./streak";
+import { addDays, currentStreak, longestStreak } from "./streak";
 
 describe("addDays", () => {
   it("crosses month and year boundaries", () => {
@@ -113,5 +113,54 @@ describe("currentStreak", () => {
     expect(
       currentStreak({ checkins, closed, today: "2026-09-11", allowedMisses: 0 }),
     ).toBe(checkins.length);
+  });
+});
+
+describe("longestStreak", () => {
+  const today = "2026-09-30";
+
+  it("is 0 with no check-ins and 1 with a single check-in", () => {
+    expect(longestStreak({ checkins: [], today })).toBe(0);
+    expect(longestStreak({ checkins: ["2026-09-10"], today })).toBe(1);
+  });
+
+  it("finds the longest run, resetting on a missed open day", () => {
+    // run A: 09-01..09-03 (3), gap on 09-04 (open miss), run B: 09-05..09-06 (2)
+    expect(
+      longestStreak({
+        checkins: ["2026-09-01", "2026-09-02", "2026-09-03", "2026-09-05", "2026-09-06"],
+        today,
+      }),
+    ).toBe(3);
+  });
+
+  it("bridges a gap that is entirely closed days", () => {
+    // 09-05 is a Saturday, 09-06 Sunday closed, 09-07 Monday — a 4-long run
+    expect(
+      longestStreak({
+        checkins: ["2026-09-04", "2026-09-05", "2026-09-07", "2026-09-08"],
+        closed: ["2026-09-06"],
+        today,
+      }),
+    ).toBe(4);
+  });
+
+  it("does not bridge when the gap has any open day", () => {
+    expect(
+      longestStreak({
+        checkins: ["2026-09-04", "2026-09-05", "2026-09-08"],
+        closed: ["2026-09-06"], // 09-07 is still an open miss
+        today,
+      }),
+    ).toBe(2);
+  });
+
+  it("ignores check-ins after today and dedupes", () => {
+    expect(
+      longestStreak({
+        checkins: ["2026-09-29", "2026-09-30", "2026-09-30", "2026-10-01", "2026-10-02"],
+        today,
+      }),
+    ).toBe(2);
   });
 });

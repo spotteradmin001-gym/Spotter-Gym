@@ -49,6 +49,41 @@ export function currentStreak(input: {
   return streak;
 }
 
+/**
+ * The longest run of attended days anywhere in the member's history. A run
+ * survives a gap only when every calendar day inside that gap is a closed day
+ * (weekly closed weekday or holiday); any missed *open* day between two
+ * check-ins ends the run. No buffer here — the allowed-misses buffer is a
+ * per billing-cycle reward concept, not a lifetime-best one. Pure; check-in
+ * dates after `today` are ignored.
+ */
+export function longestStreak(input: {
+  checkins: Iterable<string>;
+  closed?: Iterable<string>;
+  today: string;
+}): number {
+  const closed = new Set(input.closed ?? []);
+  const days = [...new Set(input.checkins)]
+    .filter((d) => d <= input.today)
+    .sort();
+  if (days.length === 0) return 0;
+
+  let best = 1;
+  let run = 1;
+  for (let i = 1; i < days.length; i++) {
+    let bridged = true;
+    for (let g = addDays(days[i - 1]!, 1); g < days[i]!; g = addDays(g, 1)) {
+      if (!closed.has(g)) {
+        bridged = false;
+        break;
+      }
+    }
+    run = bridged ? run + 1 : 1;
+    if (run > best) best = run;
+  }
+  return best;
+}
+
 /** `addDays("2026-09-08", -1)` → `"2026-09-07"`. Calendar-day math in UTC. */
 export function addDays(isoDate: string, delta: number): string {
   const d = new Date(`${isoDate}T00:00:00Z`);
