@@ -44,7 +44,7 @@ export default async function EmployeePaymentsPage() {
           <CardTitle>This month ({payments.length})</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
+          <Table variant="stacked">
             <THead>
               <TR>
                 <TH>Date</TH>
@@ -56,10 +56,10 @@ export default async function EmployeePaymentsPage() {
             <TBody>
               {payments.map((p) => (
                 <TR key={p.id}>
-                  <TD>{p.paidOn}</TD>
-                  <TD>{p.memberName}</TD>
-                  <TD>{formatPaise(p.amountPaise)}</TD>
-                  <TD>{p.method}</TD>
+                  <TD label="Date">{p.paidOn}</TD>
+                  <TD label="Member">{p.memberName}</TD>
+                  <TD label="Amount">{formatPaise(p.amountPaise)}</TD>
+                  <TD label="Method">{p.method}</TD>
                 </TR>
               ))}
             </TBody>

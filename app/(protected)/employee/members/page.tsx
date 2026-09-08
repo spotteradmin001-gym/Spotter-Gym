@@ -44,7 +44,7 @@ export default async function EmployeeMembersPage() {
           <CardTitle>Members ({members.length})</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
+          <Table variant="stacked">
             <THead>
               <TR>
                 <TH>Name</TH>
@@ -56,7 +56,7 @@ export default async function EmployeeMembersPage() {
             <TBody>
               {members.map((m) => (
                 <TR key={m.id}>
-                  <TD>
+                  <TD label="Name">
                     {canEdit ? (
                       <Link
                         href={`/employee/members/${m.id}`}
@@ -68,9 +68,9 @@ export default async function EmployeeMembersPage() {
                       m.name
                     )}
                   </TD>
-                  <TD>{m.phone}</TD>
-                  <TD>{formatPaise(m.resolvedFeePaise)}</TD>
-                  <TD className={m.status === "active" ? "" : "text-muted"}>
+                  <TD label="Phone">{m.phone}</TD>
+                  <TD label="Fee">{formatPaise(m.resolvedFeePaise)}</TD>
+                  <TD label="Status" className={m.status === "active" ? "" : "text-muted"}>
                     {m.status}
                   </TD>
                 </TR>
