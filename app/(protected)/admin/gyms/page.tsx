@@ -32,7 +32,7 @@ export default async function AdminGymsPage() {
           {gyms.length === 0 ? (
             <p className="p-4 text-sm text-muted">No gyms yet.</p>
           ) : (
-            <Table>
+            <Table variant="stacked">
               <THead>
                 <TR>
                   <TH>Name</TH>
@@ -44,7 +44,7 @@ export default async function AdminGymsPage() {
               <TBody>
                 {gyms.map((gym) => (
                   <TR key={gym.id}>
-                    <TD>
+                    <TD label="Name">
                       <Link
                         href={`/admin/gyms/${gym.id}`}
                         className="font-medium text-primary hover:underline"
@@ -53,8 +53,8 @@ export default async function AdminGymsPage() {
                       </Link>
                       <span className="block text-xs text-muted">{gym.slug}</span>
                     </TD>
-                    <TD>{gym.timezone}</TD>
-                    <TD>
+                    <TD label="Timezone">{gym.timezone}</TD>
+                    <TD label="Status">
                       <span className={gym.isActive ? "" : "text-muted"}>
                         {gym.isActive ? "Active" : "Inactive"}
                       </span>

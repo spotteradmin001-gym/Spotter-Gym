@@ -14,7 +14,7 @@ import { createOwnerAction, type CreateOwnerResult } from "../../actions";
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" size="sm" disabled={pending} aria-busy={pending}>
+    <Button type="submit" size="md" disabled={pending} aria-busy={pending}>
       {pending ? "Creating…" : "Create owner login"}
     </Button>
   );

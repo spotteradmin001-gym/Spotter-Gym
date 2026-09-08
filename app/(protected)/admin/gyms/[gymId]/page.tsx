@@ -42,7 +42,7 @@ export default async function AdminGymDetailPage({
       </Link>
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between">
+        <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
           <CardTitle>{gym.name}</CardTitle>
           <form action={setGymActiveAction}>
             <input type="hidden" name="id" value={gym.id} />
@@ -83,7 +83,7 @@ export default async function AdminGymDetailPage({
           {owners.length === 0 ? (
             <p className="p-4 text-sm text-muted">No owner login yet.</p>
           ) : (
-            <Table>
+            <Table variant="stacked">
               <THead>
                 <TR>
                   <TH>Email</TH>
@@ -97,7 +97,7 @@ export default async function AdminGymDetailPage({
               <TBody>
                 {owners.map((owner) => (
                   <TR key={owner.id}>
-                    <TD>
+                    <TD label="Email">
                       <Link
                         href={`/admin/gyms/${gymId}/users/${owner.id}`}
                         className="text-primary hover:underline"
@@ -105,21 +105,21 @@ export default async function AdminGymDetailPage({
                         {owner.email}
                       </Link>
                     </TD>
-                    <TD>
+                    <TD label="Contact">
                       <WaContactLink
                         phone={owner.phone}
                         label={`Message ${owner.email} on WhatsApp`}
                       />
                     </TD>
-                    <TD className={owner.isActive ? "" : "text-muted"}>
+                    <TD label="Status" className={owner.isActive ? "" : "text-muted"}>
                       {owner.isActive ? "Active" : "Inactive"}
                     </TD>
-                    <TD>
+                    <TD label="Last login">
                       {owner.lastLoginAt
                         ? new Date(owner.lastLoginAt).toLocaleDateString()
                         : "—"}
                     </TD>
-                    <TD>
+                    <TD label="Credentials">
                       <CredentialControls
                         targetUserId={owner.id}
                         targetRole="owner"

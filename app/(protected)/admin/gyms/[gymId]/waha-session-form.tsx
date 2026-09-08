@@ -13,7 +13,7 @@ import { updateGymWahaSessionAction } from "../../actions";
 function SaveButton() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" size="sm" disabled={pending} aria-busy={pending}>
+    <Button type="submit" size="md" disabled={pending} aria-busy={pending}>
       {pending ? "Saving…" : "Save"}
     </Button>
   );
