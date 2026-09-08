@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { EmployeeError, decidePermissionRequest } from "@/db/queries";
+import { EmployeeError, decidePermissionRequest, writeAudit } from "@/db/queries";
 import { requireOwnerGym } from "@/src/features/auth/owner-scope";
 
 export async function decideRequestAction(formData: FormData): Promise<void> {
@@ -15,6 +15,14 @@ export async function decideRequestAction(formData: FormData): Promise<void> {
 
   try {
     await decidePermissionRequest({ id, gymId, decision, decidedBy: user.id });
+    await writeAudit({
+      actorUserId: user.id,
+      actorRole: user.role,
+      gymId,
+      action: `approval.${decision}`,
+      targetType: "permission_request",
+      targetId: id,
+    });
   } catch (error) {
     if (!(error instanceof EmployeeError)) throw error;
     // already decided elsewhere — fall through to revalidate

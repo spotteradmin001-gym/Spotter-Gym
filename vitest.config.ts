@@ -32,6 +32,11 @@ export default defineConfig({
     // count-based fixtures in one suite can't race another.
     fileParallelism: false,
     environment: "node",
+    // The `db/**` suites do many sequential round-trips to Neon in
+    // ap-southeast-1; from a US CI runner that's ~200 ms each, so a single
+    // test can take several seconds. 5 s (the default) is too tight.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
     include: [
       "src/**/*.test.ts",
       "src/**/*.test.tsx",

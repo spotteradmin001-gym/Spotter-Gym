@@ -5,6 +5,7 @@
  */
 
 export * from "./auth";
+export * from "./audit";
 export * from "./gyms";
 export * from "./users";
 export * from "./config";
