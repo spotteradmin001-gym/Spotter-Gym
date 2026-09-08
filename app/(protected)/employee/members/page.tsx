@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
@@ -15,13 +15,15 @@ export default async function EmployeeMembersPage() {
   const user = await requireEmployee();
   if (!user.gymId) notFound();
 
-  const [members, perms] = await Promise.all([
-    listMembers(user.gymId),
-    listPermissionsForUser(user.id),
-  ]);
+  const perms = await listPermissionsForUser(user.id);
   const held = new Set(perms.map((p) => p.permission));
   const canCreate = held.has("member.create");
   const canEdit = held.has("member.edit");
+  // Reading the member list (PII) needs a member permission, not just an
+  // employee login.
+  if (!canCreate && !canEdit) redirect("/employee");
+
+  const members = await listMembers(user.gymId);
   const today = new Date().toISOString().slice(0, 10);
 
   return (
