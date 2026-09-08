@@ -48,6 +48,7 @@ export function PortalNav({ items }: { items: NavItem[] }) {
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
+          aria-label="Toggle navigation"
           aria-expanded={open}
           aria-controls="portal-nav-drawer"
           className="flex min-h-10 w-full items-center gap-2 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"

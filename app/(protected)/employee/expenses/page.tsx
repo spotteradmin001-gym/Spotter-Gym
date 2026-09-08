@@ -48,7 +48,7 @@ export default async function EmployeeExpensesPage() {
           <CardTitle>This month ({expenses.length})</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
+          <Table variant="stacked">
             <THead>
               <TR>
                 <TH>Date</TH>
@@ -60,10 +60,10 @@ export default async function EmployeeExpensesPage() {
             <TBody>
               {expenses.map((x) => (
                 <TR key={x.id}>
-                  <TD>{x.incurredOn}</TD>
-                  <TD>{x.label}</TD>
-                  <TD>{x.categoryName ?? "—"}</TD>
-                  <TD>{formatPaise(x.amountPaise)}</TD>
+                  <TD label="Date">{x.incurredOn}</TD>
+                  <TD label="Label">{x.label}</TD>
+                  <TD label="Category">{x.categoryName ?? "—"}</TD>
+                  <TD label="Amount">{formatPaise(x.amountPaise)}</TD>
                 </TR>
               ))}
             </TBody>
