@@ -209,7 +209,14 @@ export async function reminderCounts(
   return { sentToday: sentToday.v, pending: pending.v, failed: failed.v };
 }
 
-/** Manual "send now" / "resend": re-arm a job so the next sender run picks it up. */
+export class ReminderError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ReminderError";
+  }
+}
+
+/** Manual "resend": re-arm a job so the next sender run picks it up. */
 export async function requeueReminderJob(
   gymId: string,
   jobId: string,
@@ -224,4 +231,74 @@ export async function requeueReminderJob(
         ne(reminderJobs.status, "sent"),
       ),
     );
+}
+
+/**
+ * Manual "send reminder now" for a member: targets their soonest pending due,
+ * (re)arms an `on_due` job for it scheduled today. The local sender picks it up
+ * on its next run.
+ */
+export async function queueImmediateReminder(
+  gymId: string,
+  memberId: string,
+  asOf: Date = new Date(),
+): Promise<void> {
+  const today = asOf.toISOString().slice(0, 10);
+
+  const [gym] = await db
+    .select({ waha: gyms.wahaSessionName })
+    .from(gyms)
+    .where(eq(gyms.id, gymId))
+    .limit(1);
+  if (!gym?.waha) {
+    throw new ReminderError("Set a WAHA session for the gym in Settings first.");
+  }
+
+  const [row] = await db
+    .select({ due: dues, member: members })
+    .from(dues)
+    .innerJoin(members, eq(members.id, dues.memberId))
+    .where(
+      and(
+        eq(dues.gymId, gymId),
+        eq(dues.memberId, memberId),
+        eq(dues.status, "pending"),
+      ),
+    )
+    .orderBy(sql`${dues.dueDate} asc`)
+    .limit(1);
+  if (!row) throw new ReminderError("This member has nothing due to remind about.");
+  if (row.member.phone.length === 0) {
+    throw new ReminderError("This member has no phone number.");
+  }
+
+  const templates = await getTemplates(gymId);
+  const messageText = renderTemplate(templates.on_due, {
+    name: row.member.name,
+    amount: formatPaise(row.due.amountDuePaise),
+    due_date: formatDueDate(row.due.dueDate),
+  });
+
+  await db
+    .insert(reminderJobs)
+    .values({
+      gymId,
+      memberId,
+      dueId: row.due.id,
+      kind: "on_due",
+      scheduledFor: today,
+      status: "pending",
+      wahaSession: gym.waha,
+      messageText,
+    })
+    .onConflictDoUpdate({
+      target: [reminderJobs.dueId, reminderJobs.kind],
+      set: {
+        status: "pending",
+        scheduledFor: today,
+        error: null,
+        messageText,
+        updatedAt: new Date(),
+      },
+    });
 }
