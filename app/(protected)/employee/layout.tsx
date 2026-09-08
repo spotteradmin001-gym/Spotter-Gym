@@ -1,5 +1,4 @@
-import Link from "next/link";
-
+import { PortalNav, type NavItem } from "@/components/portal-nav";
 import { listPermissionsForUser } from "@/db/queries";
 import { requireEmployee } from "@/src/features/auth/guards";
 import { PERMISSION_LABELS, type Permission } from "@/lib/permissions";
@@ -20,20 +19,17 @@ export default async function EmployeeLayout({
   const perms = await listPermissionsForUser(user.id);
   const held = new Set(perms.map((p) => p.permission));
 
-  const items = NAV.filter((n) => n.needs.some((p) => held.has(p)));
+  const items: NavItem[] = [
+    { href: "/employee", label: "Home" },
+    ...NAV.filter((n) => n.needs.some((p) => held.has(p))).map(({ href, label }) => ({
+      href,
+      label,
+    })),
+  ];
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
-      <nav className="flex flex-wrap gap-4 border-b border-border pb-2 text-sm">
-        <Link href="/employee" className="font-medium hover:text-primary">
-          Home
-        </Link>
-        {items.map((item) => (
-          <Link key={item.href} href={item.href} className="font-medium hover:text-primary">
-            {item.label}
-          </Link>
-        ))}
-      </nav>
+      <PortalNav items={items} />
       {perms.length === 0 && (
         <p className="text-sm text-muted">
           No permissions yet — ask the gym owner to grant some.
