@@ -1,7 +1,8 @@
-# Spotter reminder engine launcher (Phase 6 Batch 6.2).
+# Spotter engine launcher (Phase 6 Batch 6.2; promotions added in CR-10 F.6).
 #
 # Starts the local Docker stack (n8n + WAHA), waits for WAHA to answer, then
-# runs the sender once. Pass -Loop to keep sending every N minutes.
+# runs the reminder sender and the promotions sender once. Pass -Loop to keep
+# running every N minutes.
 #
 #   powershell -ExecutionPolicy Bypass -File engine\start-engine.ps1
 #   powershell -ExecutionPolicy Bypass -File engine\start-engine.ps1 -Loop -EveryMinutes 15
@@ -39,7 +40,12 @@ for ($i = 0; $i -lt 60; $i++) {
 
 function Invoke-Sender {
   Push-Location $repoDir
-  try { node engine/send-reminders.mjs } finally { Pop-Location }
+  try {
+    node engine/send-reminders.mjs
+    node engine/send-promotions.mjs
+  } finally {
+    Pop-Location
+  }
 }
 
 Invoke-Sender

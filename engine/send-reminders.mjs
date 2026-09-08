@@ -51,7 +51,7 @@ async function main() {
   const pool = new pg.Pool({ connectionString: DATABASE_URL });
   try {
     const { rows } = await pool.query(
-      `select rj.id, rj.waha_session, rj.message_text, rj.attempts, m.phone
+      `select rj.id, rj.gym_id, rj.waha_session, rj.message_text, rj.attempts, m.phone
          from reminder_jobs rj
          join members m on m.id = rj.member_id
         where rj.status = 'pending'
@@ -67,6 +67,8 @@ async function main() {
 
     let sent = 0;
     let failed = 0;
+    /** Successful WAHA sends per gym this run, for waha_send_log. */
+    const sentByGym = new Map();
     for (const [i, job] of rows.entries()) {
       const result = await sendViaWaha({
         wahaUrl: WAHA_URL,
@@ -101,12 +103,31 @@ async function main() {
 
       if (next.status === "sent") sent++;
       else if (next.status === "failed") failed++;
+      // A successful WAHA call counts toward the gym's daily send total,
+      // whether or not the job flips to 'sent' this run.
+      if (result.ok && job.gym_id) {
+        sentByGym.set(job.gym_id, (sentByGym.get(job.gym_id) ?? 0) + 1);
+      }
       console.log(
         `  ${job.id} → ${next.status}${result.ok ? "" : ` (${result.error})`}`,
       );
 
       if (i < rows.length - 1) await sleep(SEND_DELAY_MS);
     }
+
+    // Record the day's reminder sends per gym so the promotions runner can
+    // work out the remaining promo budget (cap − reserve − transactional).
+    for (const [gymId, count] of sentByGym) {
+      await pool.query(
+        `insert into waha_send_log (gym_id, sent_on, kind, count)
+           values ($1, current_date, 'reminder', $2)
+         on conflict (gym_id, sent_on, kind)
+           do update set count = waha_send_log.count + excluded.count,
+                         updated_at = now()`,
+        [gymId, count],
+      );
+    }
+
     console.log(`Done. sent=${sent} failed=${failed} retrying=${rows.length - sent - failed}`);
   } finally {
     await pool.end().catch(() => undefined);
