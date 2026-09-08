@@ -17,5 +17,6 @@ export * from "./reminders";
 export * from "./payments";
 export * from "./employees";
 export * from "./expenses";
+export * from "./temp-credentials";
 export * from "./pnl";
 export * from "./overview";

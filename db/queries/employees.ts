@@ -13,6 +13,7 @@ import {
 
 import { AuthError, createUser } from "./auth";
 import { addExpense, updateExpense } from "./expenses";
+import { storeTempCredential } from "./temp-credentials";
 import { createMember, updateMember } from "./members";
 import { recordPayment } from "./payments";
 import { setUserActive } from "./users";
@@ -77,6 +78,9 @@ export async function createEmployee(input: {
       phone: input.phone?.trim() || null,
     })
     .returning();
+
+  // Make the one-time password retrievable until the employee sets their own.
+  await storeTempCredential(created.user.id, created.password);
 
   return {
     employee: {
