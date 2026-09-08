@@ -5,8 +5,12 @@ import { revalidatePath } from "next/cache";
 import {
   ConfigError,
   GymError,
+  ScheduleError,
+  addHoliday,
   addProfileField,
   deleteProfileField,
+  removeHoliday,
+  setClosedWeekdays,
   updateGym,
   updateProfileField,
   upsertTemplate,
@@ -19,7 +23,11 @@ import { err, ok, type ActionState } from "@/lib/result";
 import { requireOwnerGym } from "@/src/features/auth/owner-scope";
 
 function toMessage(error: unknown): string {
-  if (error instanceof GymError || error instanceof ConfigError) {
+  if (
+    error instanceof GymError ||
+    error instanceof ConfigError ||
+    error instanceof ScheduleError
+  ) {
     return error.message;
   }
   return "Something went wrong. Try again.";
@@ -62,6 +70,61 @@ export async function saveGymSettingsAction(
   } catch (error) {
     return err(toMessage(error));
   }
+}
+
+export async function saveScheduleAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { gymId } = await requireOwnerGym();
+
+  const weekdays = formData
+    .getAll("closedWeekday")
+    .map((v) => Number(String(v)))
+    .filter((n) => Number.isInteger(n));
+
+  const percent = numOrUndef(formData.get("streakRewardPercent"));
+  const misses = numOrUndef(formData.get("streakAllowedMisses"));
+
+  try {
+    await setClosedWeekdays(gymId, weekdays);
+    await updateGym(gymId, {
+      streakRewardPercent: percent ?? 0,
+      streakAllowedMisses: misses ?? 0,
+    });
+    revalidatePath("/owner/settings");
+    return ok();
+  } catch (error) {
+    return err(toMessage(error));
+  }
+}
+
+export async function addHolidayAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { gymId } = await requireOwnerGym();
+  try {
+    await addHoliday({
+      gymId,
+      date: String(formData.get("date") ?? ""),
+      label: String(formData.get("label") ?? ""),
+    });
+    revalidatePath("/owner/settings");
+    return ok();
+  } catch (error) {
+    return err(toMessage(error));
+  }
+}
+
+export async function removeHolidayAction(formData: FormData): Promise<void> {
+  const { gymId } = await requireOwnerGym();
+  try {
+    await removeHoliday({ gymId, id: String(formData.get("id") ?? "") });
+  } catch {
+    // A locked-cycle holiday simply stays; the page re-renders unchanged.
+  }
+  revalidatePath("/owner/settings");
 }
 
 export async function saveTemplateAction(

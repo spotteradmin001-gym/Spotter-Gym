@@ -27,6 +27,9 @@ export type Gym = {
   billingAnchorMode: "per_member" | "fixed";
   billingAnchorDay: number;
   reminderDaysBefore: number;
+  closedWeekdays: number[];
+  streakRewardPercent: number;
+  streakAllowedMisses: number;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -47,6 +50,9 @@ function mapGym(row: typeof gyms.$inferSelect): Gym {
     billingAnchorMode: row.billingAnchorMode as "per_member" | "fixed",
     billingAnchorDay: row.billingAnchorDay,
     reminderDaysBefore: row.reminderDaysBefore,
+    closedWeekdays: [...row.closedWeekdays].sort((a, b) => a - b),
+    streakRewardPercent: row.streakRewardPercent,
+    streakAllowedMisses: row.streakAllowedMisses,
     isActive: row.isActive,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -136,6 +142,8 @@ export type GymPatch = Partial<{
   billingAnchorMode: "per_member" | "fixed";
   billingAnchorDay: number;
   reminderDaysBefore: number;
+  streakRewardPercent: number;
+  streakAllowedMisses: number;
 }>;
 
 export async function updateGym(id: string, patch: GymPatch): Promise<Gym> {
@@ -192,6 +200,26 @@ export async function updateGym(id: string, patch: GymPatch): Promise<Gym> {
       throw new GymError("Billing day must be between 1 and 28.");
     }
     set.billingAnchorDay = patch.billingAnchorDay;
+  }
+  if (patch.streakRewardPercent !== undefined) {
+    if (
+      !Number.isInteger(patch.streakRewardPercent) ||
+      patch.streakRewardPercent < 0 ||
+      patch.streakRewardPercent > 100
+    ) {
+      throw new GymError("Streak reward percent must be a whole number from 0 to 100.");
+    }
+    set.streakRewardPercent = patch.streakRewardPercent;
+  }
+  if (patch.streakAllowedMisses !== undefined) {
+    if (
+      !Number.isInteger(patch.streakAllowedMisses) ||
+      patch.streakAllowedMisses < 0 ||
+      patch.streakAllowedMisses > 31
+    ) {
+      throw new GymError("Allowed misses must be a whole number from 0 to 31.");
+    }
+    set.streakAllowedMisses = patch.streakAllowedMisses;
   }
 
   const [row] = await db

@@ -3,7 +3,13 @@ import { notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/table";
-import { getGym, getTemplates, listProfileFields } from "@/db/queries";
+import {
+  getGym,
+  getGymSchedule,
+  getTemplates,
+  listProfileFields,
+  scheduleLockBoundary,
+} from "@/db/queries";
 import { requireOwner } from "@/src/features/auth/guards";
 
 import {
@@ -12,6 +18,7 @@ import {
 } from "./actions";
 import { AddProfileFieldForm } from "./add-profile-field-form";
 import { GymSettingsForm } from "./gym-settings-form";
+import { ScheduleForm } from "./schedule-form";
 import { TemplateForm } from "./template-form";
 
 export const dynamic = "force-dynamic";
@@ -20,10 +27,12 @@ export default async function OwnerSettingsPage() {
   const user = await requireOwner();
   if (!user.gymId) notFound();
 
-  const [gym, fields, templates] = await Promise.all([
+  const [gym, fields, templates, schedule, lockBoundary] = await Promise.all([
     getGym(user.gymId),
     listProfileFields(user.gymId),
     getTemplates(user.gymId),
+    getGymSchedule(user.gymId),
+    scheduleLockBoundary(user.gymId),
   ]);
   if (!gym) notFound();
 
@@ -39,6 +48,24 @@ export default async function OwnerSettingsPage() {
         </CardHeader>
         <CardContent>
           <GymSettingsForm gym={gym} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Holidays & schedule</CardTitle>
+          <CardDescription>
+            Weekly closed days, one-off holidays, and the attendance streak
+            reward. Rest days never break a member&apos;s streak.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ScheduleForm
+            gym={gym}
+            closedWeekdays={schedule.closedWeekdays}
+            holidays={schedule.holidays}
+            lockBoundary={lockBoundary}
+          />
         </CardContent>
       </Card>
 

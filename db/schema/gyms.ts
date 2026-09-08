@@ -5,6 +5,7 @@ import {
   doublePrecision,
   integer,
   pgTable,
+  smallint,
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
@@ -47,6 +48,18 @@ export const gyms = pgTable(
     billingAnchorMode: text("billing_anchor_mode").notNull().default("per_member"),
     billingAnchorDay: integer("billing_anchor_day").notNull().default(1),
     reminderDaysBefore: integer("reminder_days_before").notNull().default(3),
+    // Member streak gamification (Phase E / CR-9). `closedWeekdays` holds the
+    // JS `getDay()` numbers the gym is normally shut (0 = Sunday), default
+    // `{0}`. A closed day never requires a check-in and never breaks a streak.
+    // `streakRewardPercent` 0 = the whole attendance-reward feature is off for
+    // this gym (no separate enable flag). `streakAllowedMisses` is the per
+    // billing-cycle buffer of missed open days a member is still forgiven.
+    closedWeekdays: smallint("closed_weekdays")
+      .array()
+      .notNull()
+      .default(sql`'{0}'::smallint[]`),
+    streakRewardPercent: integer("streak_reward_percent").notNull().default(0),
+    streakAllowedMisses: integer("streak_allowed_misses").notNull().default(0),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -56,5 +69,13 @@ export const gyms = pgTable(
     check("gyms_checkin_radius_check", sql`${t.checkinRadiusM} between 10 and 5000`),
     check("gyms_billing_anchor_mode_check", sql`${t.billingAnchorMode} in ('per_member', 'fixed')`),
     check("gyms_billing_anchor_day_check", sql`${t.billingAnchorDay} between 1 and 28`),
+    check(
+      "gyms_streak_reward_percent_check",
+      sql`${t.streakRewardPercent} between 0 and 100`,
+    ),
+    check(
+      "gyms_streak_allowed_misses_check",
+      sql`${t.streakAllowedMisses} between 0 and 31`,
+    ),
   ],
 );
