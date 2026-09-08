@@ -12,6 +12,7 @@
  */
 
 export * from "./gyms";
+export * from "./gym-holidays";
 export * from "./auth";
 export * from "./audits";
 export * from "./config";
