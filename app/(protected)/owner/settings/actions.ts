@@ -122,7 +122,7 @@ export async function removeHolidayAction(formData: FormData): Promise<void> {
   try {
     await removeHoliday({ gymId, id: String(formData.get("id") ?? "") });
   } catch {
-    // A locked-cycle holiday simply stays; the page re-renders unchanged.
+    // Wrong gym / already gone — the page re-renders unchanged.
   }
   revalidatePath("/owner/settings");
 }

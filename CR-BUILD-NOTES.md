@@ -85,6 +85,18 @@ downscale; first reward-cron run scores one closed cycle, no backfill.
   tables so `promotion.create` is a valid permission / action type — the plan
   had said F.4 needed no migration; it did.
 
+## Post-review revisions
+
+- **R.1 — streak reward auto-slides.** PR #53. `applyDueStreakDiscounts` now
+  applies a pending `earned` credit to the member's oldest `pending` due on or
+  after `redeem_period` (slides forward when the redeem-period due is already
+  settled or missing; stays `earned` and retries when no eligible due exists).
+- **R.2 — no schedule lock.** Closed-weekday and holiday edits are allowed for
+  any date; `scheduleLockBoundary` and its guards removed. Calendar / current
+  streak / not-yet-scored reward cycles already read `closedDates(...)` live, so
+  a schedule edit takes effect immediately. Already-written `earned` / `missed`
+  reward rows are historical and not rewritten.
+
 ## Test infrastructure note (not a decision — a known nuisance)
 
 The `db/**` vitest integration suites all target one shared Neon **preview**

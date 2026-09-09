@@ -34,12 +34,10 @@ export function ScheduleForm({
   gym,
   closedWeekdays,
   holidays,
-  lockBoundary,
 }: {
   gym: Gym;
   closedWeekdays: number[];
   holidays: GymHoliday[];
-  lockBoundary: string;
 }) {
   const [state, formAction] = useActionState<ActionState, FormData>(
     saveScheduleAction,
@@ -62,7 +60,9 @@ export function ScheduleForm({
           <legend className="text-sm font-medium">Weekly closed days</legend>
           <p className="text-xs text-muted">
             A closed day never needs a check-in and never breaks a member&apos;s
-            streak. Changes apply to streak scoring from the next billing cycle.
+            streak. Changes apply immediately to everyone — each member&apos;s
+            calendar, current streak and any not-yet-scored reward cycle use the
+            new schedule right away.
           </p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {WEEKDAYS.map((d) => (
@@ -126,37 +126,31 @@ export function ScheduleForm({
         <div>
           <p className="text-sm font-medium">Holidays</p>
           <p className="text-xs text-muted">
-            One-off closed dates. The current billing cycle is locked — you can
-            only add or remove holidays on or after{" "}
-            <span className="font-mono">{lockBoundary}</span>.
+            One-off closed dates, for any date — past, current or future.
+            Changes apply immediately to everyone and recompute every affected
+            member&apos;s calendar, current streak and not-yet-scored reward
+            cycles.
           </p>
         </div>
 
         {holidays.length > 0 && (
           <ul className="flex flex-col gap-1.5">
-            {holidays.map((h) => {
-              const locked = h.date < lockBoundary;
-              return (
-                <li
-                  key={h.id}
-                  className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm"
-                >
-                  <span>
-                    <span className="font-mono">{h.date}</span> — {h.label}
-                  </span>
-                  {locked ? (
-                    <span className="text-xs text-muted">Locked</span>
-                  ) : (
-                    <form action={removeHolidayAction}>
-                      <input type="hidden" name="id" value={h.id} />
-                      <Button type="submit" variant="ghost" size="sm">
-                        Remove
-                      </Button>
-                    </form>
-                  )}
-                </li>
-              );
-            })}
+            {holidays.map((h) => (
+              <li
+                key={h.id}
+                className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm"
+              >
+                <span>
+                  <span className="font-mono">{h.date}</span> — {h.label}
+                </span>
+                <form action={removeHolidayAction}>
+                  <input type="hidden" name="id" value={h.id} />
+                  <Button type="submit" variant="ghost" size="sm">
+                    Remove
+                  </Button>
+                </form>
+              </li>
+            ))}
           </ul>
         )}
 
@@ -165,7 +159,7 @@ export function ScheduleForm({
           className="grid gap-3 sm:grid-cols-[auto_1fr_auto] sm:items-end"
         >
           <FormField htmlFor="h-date" label="Date">
-            <Input id="h-date" name="date" type="date" min={lockBoundary} required />
+            <Input id="h-date" name="date" type="date" required />
           </FormField>
           <FormField htmlFor="h-label" label="Label">
             <Input id="h-label" name="label" required minLength={2} maxLength={80} />

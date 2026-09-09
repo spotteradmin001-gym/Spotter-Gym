@@ -8,7 +8,6 @@ import {
   getGymSchedule,
   getTemplates,
   listProfileFields,
-  scheduleLockBoundary,
 } from "@/db/queries";
 import { requireOwner } from "@/src/features/auth/guards";
 
@@ -27,12 +26,11 @@ export default async function OwnerSettingsPage() {
   const user = await requireOwner();
   if (!user.gymId) notFound();
 
-  const [gym, fields, templates, schedule, lockBoundary] = await Promise.all([
+  const [gym, fields, templates, schedule] = await Promise.all([
     getGym(user.gymId),
     listProfileFields(user.gymId),
     getTemplates(user.gymId),
     getGymSchedule(user.gymId),
-    scheduleLockBoundary(user.gymId),
   ]);
   if (!gym) notFound();
 
@@ -64,7 +62,6 @@ export default async function OwnerSettingsPage() {
             gym={gym}
             closedWeekdays={schedule.closedWeekdays}
             holidays={schedule.holidays}
-            lockBoundary={lockBoundary}
           />
         </CardContent>
       </Card>
