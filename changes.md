@@ -781,6 +781,11 @@ budget.
 ## CR-11 — Admin can approve + mark-paid a promotion on the owner's behalf
 
 **Raised:** 2026-09-09, during the post-CR production smoke test.
+**Shipped:** 2026-09-09 — PR #57, squash-merged to `main` (`2e80e86`),
+auto-deployed to Vercel production (`spotter-gym-pi.vercel.app`). No schema
+change, so no migration / prod DB step. Also hardened the `promotions.test.ts`
+`afterAll` to self-heal stale `test_promo` fixtures on the shared preview
+branch.
 
 ### Problem
 
