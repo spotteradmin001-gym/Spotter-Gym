@@ -20,6 +20,10 @@
 # engine promo-image download cache
 /engine/.cache/
 
+# engine launcher runtime files (CR-12)
+/engine/launcher/engine.log
+/engine/launcher/status.json
+
 # next.js
 /.next/
 /out/
