@@ -1,29 +1,27 @@
 import { NextResponse } from "next/server";
 
-import { getPromotion } from "@/db/queries";
 import {
+  deletePromoImage,
   fetchPromoImage,
   isAuthorizedPromoMedia,
   isPromoMediaSecretSet,
-  PromoMediaError,
 } from "@/lib/promo-media";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Streams a promotion's image bytes from Google Drive to the local WAHA engine
- * (Phase F / CR-10). Bearer-authed with `PROMO_MEDIA_SECRET`, the same shape as
+ * Promo-image bytes for the local WAHA engine (Phase F / CR-10, storage
+ * reworked in R.4). Bearer-authed with `PROMO_MEDIA_SECRET`, the same shape as
  * the cron endpoints.
  *
  *   - secret unset            → 503 (the engine then sends text-only)
  *   - wrong / missing bearer  → 401
- *   - unknown promotion / no image part → 404
- *   - Drive failure           → 502
+ *   - no stored image         → 404 (never set, deleted after sending, purged)
+ *
+ * `GET` streams the bytes; `DELETE` drops them once the engine is done with the
+ * promotion.
  */
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ promotionId: string }> },
-) {
+function authGate(request: Request): NextResponse | null {
   if (!isPromoMediaSecretSet()) {
     return NextResponse.json(
       { error: "Promo media is not configured." },
@@ -33,27 +31,39 @@ export async function GET(
   if (!isAuthorizedPromoMedia(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  return null;
+}
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ promotionId: string }> },
+) {
+  const blocked = authGate(request);
+  if (blocked) return blocked;
 
   const { promotionId } = await params;
-  const promotion = await getPromotion(promotionId);
-  if (!promotion || !promotion.imageDriveFileId) {
+  const image = await fetchPromoImage(promotionId);
+  if (!image) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  try {
-    const { bytes, mime } = await fetchPromoImage(promotion.imageDriveFileId);
-    return new Response(new Uint8Array(bytes), {
-      headers: {
-        "content-type": promotion.imageMime || mime,
-        "content-length": String(bytes.byteLength),
-        "cache-control": "no-store",
-      },
-    });
-  } catch (error) {
-    const message =
-      error instanceof PromoMediaError
-        ? error.message
-        : "Could not fetch the image.";
-    return NextResponse.json({ error: message }, { status: 502 });
-  }
+  return new Response(new Uint8Array(image.bytes), {
+    headers: {
+      "content-type": image.mime,
+      "content-length": String(image.bytes.byteLength),
+      "cache-control": "no-store",
+    },
+  });
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ promotionId: string }> },
+) {
+  const blocked = authGate(request);
+  if (blocked) return blocked;
+
+  const { promotionId } = await params;
+  await deletePromoImage(promotionId);
+  return new Response(null, { status: 204 });
 }

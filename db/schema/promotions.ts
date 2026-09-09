@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
+  customType,
   index,
   integer,
   pgTable,
@@ -13,6 +14,13 @@ import {
 import { users } from "./auth";
 import { gyms } from "./gyms";
 import { members } from "./members";
+
+/** Raw binary column. `pg` reads/writes these as Node `Buffer`. */
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return "bytea";
+  },
+});
 
 /**
  * Paid bulk WhatsApp promotions (Phase F / CR-10).
@@ -55,12 +63,22 @@ export const promotions = pgTable(
     createdByUserId: text("created_by_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
-    // Content. `body` null = no text part; `image_drive_file_id` null = no
-    // image part. `has_text` / `has_image` are the denormalised part flags the
-    // cost maths and the engine read.
+    // Content. `body` null = no text part; `has_text` / `has_image` are the
+    // denormalised part flags the cost maths and the engine read.
+    //
+    // The image is stored inline as `image_bytes` (R.4) and is ephemeral: the
+    // engine deletes it once the promotion reaches a terminal status, and a
+    // daily purge nulls anything left behind. `image_stored_at` /
+    // `image_deleted_at` track that lifecycle; `has_image` stays true after the
+    // bytes are gone so the history still shows the promotion carried an image.
+    // `image_drive_file_id` is a legacy column from the old Google Drive
+    // backend — no longer written, kept because earlier migrations reference it.
     body: text("body"),
     imageDriveFileId: text("image_drive_file_id"),
     imageMime: text("image_mime"),
+    imageBytes: bytea("image_bytes"),
+    imageStoredAt: timestamp("image_stored_at", { withTimezone: true }),
+    imageDeletedAt: timestamp("image_deleted_at", { withTimezone: true }),
     hasText: boolean("has_text").notNull().default(false),
     hasImage: boolean("has_image").notNull().default(false),
     status: text("status").notNull().default("draft"),

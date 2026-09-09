@@ -17,6 +17,9 @@
 /blob-report
 /playwright/.cache
 
+# engine promo-image download cache
+/engine/.cache/
+
 # next.js
 /.next/
 /out/

@@ -1,32 +1,25 @@
 import "server-only";
 
-import crypto from "node:crypto";
+import { and, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
+
+import { db } from "@/db/client";
+import { promotions } from "@/db/schema";
 
 /**
- * Promo-image storage for paid WhatsApp promotions (Phase F / CR-10).
+ * Promo-image storage for paid WhatsApp promotions (Phase F / CR-10, storage
+ * reworked in R.4).
  *
- * Images live in our own Google Drive, reached with a Google **service
- * account** — credentials never leave the server. The app uploads on compose
- * (`uploadPromoImage`) and the local WAHA engine reads the bytes back through
+ * The image lives inline in `promotions.image_bytes` (Postgres `bytea`) — no
+ * Google account, no object store, near-zero standing footprint. It is
+ * ephemeral: the local WAHA engine downloads it once through
  * `GET /api/promo-media/[promotionId]` (which calls `fetchPromoImage`),
- * base64-encodes them locally and attaches them to WAHA. No Drive URL is ever
- * handed to WAHA.
+ * base64-encodes it for WAHA, and `DELETE`s it (→ `deletePromoImage`) as soon
+ * as the promotion reaches a terminal status. `purgeStalePromoImages` is a
+ * daily backstop for anything the engine left behind.
  *
- * Zero new dependencies: the service-account JWT is assembled and RS256-signed
- * with Node's built-in `crypto`, and every Google call is a plain `fetch`.
- *
- * Graceful degradation (mirrors `lib/mail.ts`):
- *   - `GOOGLE_SERVICE_ACCOUNT_JSON` / `GDRIVE_PROMO_FOLDER_ID` unset →
- *     `isPromoMediaEnabled()` is false; the compose UI hides image upload and
- *     text-only promotions still work end to end.
- *   - `PROMO_MEDIA_SECRET` unset → the media route returns 503 and the engine
- *     sends text-only, marking the image part `skipped`.
+ * `PROMO_MEDIA_SECRET` unset → the media route returns 503 and the engine sends
+ * text-only, marking the image part `skipped`.
  */
-
-const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive";
-const TOKEN_URL = "https://oauth2.googleapis.com/token";
-const UPLOAD_URL =
-  "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id";
 
 /** Hard upload ceiling so the base64 payload the engine sends to WAHA stays sane. */
 export const MAX_PROMO_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -38,6 +31,17 @@ export const ALLOWED_PROMO_IMAGE_MIME = [
   "image/webp",
 ] as const;
 
+/** Terminal promotion statuses — an image is safe to purge once here. */
+const TERMINAL_PROMOTION_STATUS = [
+  "sent",
+  "partly_failed",
+  "failed",
+  "cancelled",
+] as const;
+
+/** How long a terminal promotion's image may linger before the daily purge. */
+const PURGE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+
 export class PromoMediaError extends Error {
   constructor(message: string) {
     super(message);
@@ -45,34 +49,13 @@ export class PromoMediaError extends Error {
   }
 }
 
-type ServiceAccount = { clientEmail: string; privateKey: string };
-
-function serviceAccount(): ServiceAccount | null {
-  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim();
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as {
-      client_email?: string;
-      private_key?: string;
-    };
-    if (!parsed.client_email || !parsed.private_key) return null;
-    return {
-      clientEmail: parsed.client_email,
-      // Env vars flatten newlines; restore them for the PEM parser.
-      privateKey: parsed.private_key.replace(/\\n/g, "\n"),
-    };
-  } catch {
-    return null;
-  }
-}
-
-function promoFolderId(): string | null {
-  return process.env.GDRIVE_PROMO_FOLDER_ID?.trim() || null;
-}
-
-/** True when image upload can work — a valid service account and a target folder. */
+/**
+ * True when the feature is usable — i.e. the app can reach its database. There
+ * is no external dependency any more; this stays a function so the compose flow
+ * and its tests can gate on it the same way they gate on mail.
+ */
 export function isPromoMediaEnabled(): boolean {
-  return serviceAccount() !== null && promoFolderId() !== null;
+  return Boolean(process.env.DATABASE_URL?.trim());
 }
 
 /** True when the media route's shared secret is configured. */
@@ -92,21 +75,14 @@ export function isAuthorizedPromoMedia(request: Request): boolean {
 }
 
 /**
- * Validate a candidate promo image. Pure — no Drive call — so the compose
- * action and its tests can use it directly. Throws `PromoMediaError` with
- * user-facing copy.
+ * Validate a candidate promo image. Pure — no DB call — so the compose action
+ * and its tests can use it directly. Throws `PromoMediaError` with user-facing
+ * copy.
  */
-export function assertValidPromoImage(
-  bytes: Uint8Array,
-  mime: string,
-): void {
+export function assertValidPromoImage(bytes: Uint8Array, mime: string): void {
   const normalised = mime.trim().toLowerCase();
-  if (
-    !(ALLOWED_PROMO_IMAGE_MIME as readonly string[]).includes(normalised)
-  ) {
-    throw new PromoMediaError(
-      "The image must be a JPEG, PNG or WebP file.",
-    );
+  if (!(ALLOWED_PROMO_IMAGE_MIME as readonly string[]).includes(normalised)) {
+    throw new PromoMediaError("The image must be a JPEG, PNG or WebP file.");
   }
   if (bytes.byteLength === 0) {
     throw new PromoMediaError("That image file is empty.");
@@ -116,146 +92,96 @@ export function assertValidPromoImage(
   }
 }
 
-function base64Url(input: Buffer | string): string {
-  return Buffer.from(input).toString("base64url");
-}
-
-let tokenCache: { token: string; expiresAt: number } | undefined;
-
-/** Reset the cached access token — test seam. */
-export function __resetPromoMediaTokenCache(): void {
-  tokenCache = undefined;
-}
-
-async function accessToken(sa: ServiceAccount): Promise<string> {
-  const now = Math.floor(Date.now() / 1000);
-  if (tokenCache && tokenCache.expiresAt - 60 > now) {
-    return tokenCache.token;
-  }
-
-  const header = base64Url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const claims = base64Url(
-    JSON.stringify({
-      iss: sa.clientEmail,
-      scope: DRIVE_SCOPE,
-      aud: TOKEN_URL,
-      iat: now,
-      exp: now + 3600,
-    }),
-  );
-  const signingInput = `${header}.${claims}`;
-  let signature: Buffer;
-  try {
-    signature = crypto
-      .createSign("RSA-SHA256")
-      .update(signingInput)
-      .sign(sa.privateKey);
-  } catch {
-    throw new PromoMediaError(
-      "The Google service-account key is not a valid private key.",
-    );
-  }
-  const assertion = `${signingInput}.${base64Url(signature)}`;
-
-  const res = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion,
-    }),
-  });
-  if (!res.ok) {
-    throw new PromoMediaError(
-      `Google rejected the service-account token request (${res.status}).`,
-    );
-  }
-  const json = (await res.json()) as {
-    access_token?: string;
-    expires_in?: number;
-  };
-  if (!json.access_token) {
-    throw new PromoMediaError("Google returned no access token.");
-  }
-  tokenCache = {
-    token: json.access_token,
-    expiresAt: now + (json.expires_in ?? 3600),
-  };
-  return json.access_token;
-}
-
 /**
- * Upload image bytes to the promo Drive folder. Returns the Drive file id to
- * store on the promotion. Validates type + size first.
+ * Store image bytes on an existing promotion. Validates type + size first.
+ * Sets `image_bytes` + `image_mime` + `image_stored_at = now()`, clears
+ * `image_deleted_at`, and flips `has_image` true.
  */
 export async function uploadPromoImage(
+  promotionId: string,
   bytes: Uint8Array,
   mime: string,
-): Promise<string> {
-  const sa = serviceAccount();
-  const folderId = promoFolderId();
-  if (!sa || !folderId) {
-    throw new PromoMediaError("Image upload is not configured on this server.");
-  }
+): Promise<void> {
   assertValidPromoImage(bytes, mime);
 
-  const token = await accessToken(sa);
-  const boundary = `spotter-${crypto.randomUUID()}`;
-  const metadata = JSON.stringify({
-    name: `promo-${Date.now()}`,
-    parents: [folderId],
-    mimeType: mime,
-  });
-  const body = Buffer.concat([
-    Buffer.from(
-      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`,
-    ),
-    Buffer.from(`--${boundary}\r\nContent-Type: ${mime}\r\n\r\n`),
-    Buffer.from(bytes),
-    Buffer.from(`\r\n--${boundary}--`),
-  ]);
+  const rows = await db
+    .update(promotions)
+    .set({
+      imageBytes: Buffer.from(bytes),
+      imageMime: mime.trim().toLowerCase(),
+      imageStoredAt: new Date(),
+      imageDeletedAt: null,
+      hasImage: true,
+      updatedAt: new Date(),
+    })
+    .where(eq(promotions.id, promotionId))
+    .returning({ id: promotions.id });
 
-  const res = await fetch(UPLOAD_URL, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${token}`,
-      "content-type": `multipart/related; boundary=${boundary}`,
-    },
-    body,
-  });
-  if (!res.ok) {
-    throw new PromoMediaError(`Drive rejected the upload (${res.status}).`);
+  if (rows.length === 0) {
+    throw new PromoMediaError("That promotion no longer exists.");
   }
-  const json = (await res.json()) as { id?: string };
-  if (!json.id) {
-    throw new PromoMediaError("Drive upload returned no file id.");
-  }
-  return json.id;
 }
 
 export type PromoImageBytes = { bytes: Buffer; mime: string };
 
-/** Download the bytes for a Drive file id. Used by the media route. */
+/**
+ * The stored bytes for a promotion, or null when there is nothing to serve —
+ * the image was deleted after sending, purged, or the promotion never had one.
+ */
 export async function fetchPromoImage(
-  fileId: string,
-): Promise<PromoImageBytes> {
-  const sa = serviceAccount();
-  if (!sa) {
-    throw new PromoMediaError("Image storage is not configured on this server.");
-  }
-  const token = await accessToken(sa);
-  const res = await fetch(
-    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(
-      fileId,
-    )}?alt=media`,
-    { headers: { authorization: `Bearer ${token}` } },
-  );
-  if (!res.ok) {
-    throw new PromoMediaError(`Drive could not return that file (${res.status}).`);
-  }
-  const mime =
-    res.headers.get("content-type")?.split(";")[0]?.trim() ||
-    "application/octet-stream";
-  const bytes = Buffer.from(await res.arrayBuffer());
-  return { bytes, mime };
+  promotionId: string,
+): Promise<PromoImageBytes | null> {
+  const [row] = await db
+    .select({ bytes: promotions.imageBytes, mime: promotions.imageMime })
+    .from(promotions)
+    .where(eq(promotions.id, promotionId))
+    .limit(1);
+
+  if (!row || !row.bytes || row.bytes.byteLength === 0) return null;
+  return {
+    bytes: Buffer.from(row.bytes),
+    mime: row.mime || "application/octet-stream",
+  };
+}
+
+/**
+ * Drop a promotion's stored image: null `image_bytes`, stamp
+ * `image_deleted_at`. `has_image` is left true so the UI / history still shows
+ * the promotion carried an image. Idempotent — a second call is a no-op.
+ */
+export async function deletePromoImage(promotionId: string): Promise<void> {
+  await db
+    .update(promotions)
+    .set({ imageBytes: null, imageDeletedAt: new Date(), updatedAt: new Date() })
+    .where(
+      and(
+        eq(promotions.id, promotionId),
+        isNotNull(promotions.imageBytes),
+      ),
+    );
+}
+
+/**
+ * Daily backstop: null `image_bytes` for terminal promotions whose image the
+ * engine did not clean up and that finished more than a week ago. Returns how
+ * many rows were purged.
+ */
+export async function purgeStalePromoImages(
+  asOf: Date = new Date(),
+): Promise<number> {
+  const cutoff = new Date(asOf.getTime() - PURGE_AFTER_MS);
+
+  const rows = await db
+    .update(promotions)
+    .set({ imageBytes: null, imageDeletedAt: new Date(), updatedAt: new Date() })
+    .where(
+      and(
+        inArray(promotions.status, [...TERMINAL_PROMOTION_STATUS]),
+        isNotNull(promotions.imageBytes),
+        lt(sql`coalesce(${promotions.sentAt}, ${promotions.updatedAt})`, cutoff),
+      ),
+    )
+    .returning({ id: promotions.id });
+
+  return rows.length;
 }

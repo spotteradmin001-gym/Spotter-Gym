@@ -5,7 +5,6 @@ import {
   assertValidPromoImage,
   isPromoMediaEnabled,
   PromoMediaError,
-  uploadPromoImage,
 } from "@/lib/promo-media";
 import {
   type MemberOption,
@@ -15,7 +14,7 @@ import { ActionError } from "@/lib/result";
 
 export type ParsedCompose = {
   body: string | null;
-  imageDriveFileId: string | null;
+  imageBytes: Buffer | null;
   imageMime: string | null;
   recipients: Array<{
     phone: string;
@@ -30,8 +29,9 @@ export type ParsedCompose = {
  * Shared server-side parse for the promotion compose form (owner + employee).
  * Re-runs the F.3 pure `resolveRecipients` on freshly-loaded members so the
  * client can never smuggle a number past the member-match / dedupe rules,
- * enforces the confirmation checkbox (guardrail 2), and uploads any image to
- * Drive. Throws `ActionError` with user-facing copy.
+ * enforces the confirmation checkbox (guardrail 2), and validates any image.
+ * The bytes are handed back for the caller to persist on the new promotion
+ * row. Throws `ActionError` with user-facing copy.
  */
 export async function parseComposeForm(
   gymId: string,
@@ -76,7 +76,7 @@ export async function parseComposeForm(
     throw new ActionError("Add at least one valid recipient.");
   }
 
-  let imageDriveFileId: string | null = null;
+  let imageBytes: Buffer | null = null;
   let imageMime: string | null = null;
   const file = form.get("image");
   if (file instanceof File && file.size > 0) {
@@ -88,21 +88,21 @@ export async function parseComposeForm(
     const bytes = new Uint8Array(await file.arrayBuffer());
     try {
       assertValidPromoImage(bytes, file.type);
-      imageDriveFileId = await uploadPromoImage(bytes, file.type);
-      imageMime = file.type;
     } catch (error) {
       if (error instanceof PromoMediaError) throw new ActionError(error.message);
       throw error;
     }
+    imageBytes = Buffer.from(bytes);
+    imageMime = file.type;
   }
 
-  if (!body && !imageDriveFileId) {
+  if (!body && !imageBytes) {
     throw new ActionError("Add a message, an image, or both.");
   }
 
   return {
     body,
-    imageDriveFileId,
+    imageBytes,
     imageMime,
     recipients: resolved.recipients.map((r) => ({
       phone: r.phone,

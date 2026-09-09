@@ -5,6 +5,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import { gyms, promotionRecipients, promotions } from "@/db/schema";
 import { estimate, partsPerRecipient } from "@/lib/promo-cost";
+import { PromoMediaError, uploadPromoImage } from "@/lib/promo-media";
 
 /** Caller-facing failures; the server-action layer maps this to user copy. */
 export class PromotionError extends Error {
@@ -81,7 +82,47 @@ export type PromotionRecipient = {
   updatedAt: string;
 };
 
-function mapPromotion(row: typeof promotions.$inferSelect): Promotion {
+/**
+ * Every `promotions` column **except `image_bytes`**. Read queries use this so a
+ * `SELECT` never drags up to 5 MB of blob per row (a list endpoint would pull
+ * one per row). The only place that reads `image_bytes` is `fetchPromoImage` in
+ * `lib/promo-media.ts`.
+ */
+const promotionColumns = {
+  id: promotions.id,
+  gymId: promotions.gymId,
+  createdByUserId: promotions.createdByUserId,
+  body: promotions.body,
+  imageDriveFileId: promotions.imageDriveFileId,
+  imageMime: promotions.imageMime,
+  imageStoredAt: promotions.imageStoredAt,
+  imageDeletedAt: promotions.imageDeletedAt,
+  hasText: promotions.hasText,
+  hasImage: promotions.hasImage,
+  status: promotions.status,
+  settlement: promotions.settlement,
+  recipientCount: promotions.recipientCount,
+  perMessagePaise: promotions.perMessagePaise,
+  estimatedTotalPaise: promotions.estimatedTotalPaise,
+  prepaidPaise: promotions.prepaidPaise,
+  billedTotalPaise: promotions.billedTotalPaise,
+  refundPaise: promotions.refundPaise,
+  adminNote: promotions.adminNote,
+  pausedAt: promotions.pausedAt,
+  pauseReason: promotions.pauseReason,
+  submittedAt: promotions.submittedAt,
+  pricedAt: promotions.pricedAt,
+  approvedAt: promotions.approvedAt,
+  paidAt: promotions.paidAt,
+  sentAt: promotions.sentAt,
+  reconciledAt: promotions.reconciledAt,
+  createdAt: promotions.createdAt,
+  updatedAt: promotions.updatedAt,
+} as const;
+
+type PromotionRow = Omit<typeof promotions.$inferSelect, "imageBytes">;
+
+function mapPromotion(row: PromotionRow): Promotion {
   return {
     id: row.id,
     gymId: row.gymId,
@@ -136,20 +177,20 @@ function mapRecipient(
 }
 
 /**
- * Create a `draft` promotion. Content validation, recipient building, the money
- * steps and the send state machine are layered on in later Phase F batches;
- * this is the base row.
+ * Create a `draft` promotion. When `imageBytes` is supplied the bytes are
+ * stored inline on the new row via `uploadPromoImage` (R.4) — validation
+ * (type + 5 MB ceiling) happens there and surfaces as a `PromotionError`.
  */
 export async function createPromotionDraft(input: {
   gymId: string;
   createdByUserId?: string | null;
   body?: string | null;
-  imageDriveFileId?: string | null;
+  imageBytes?: Buffer | Uint8Array | null;
   imageMime?: string | null;
 }): Promise<Promotion> {
   const body = input.body?.trim() || null;
-  const imageDriveFileId = input.imageDriveFileId?.trim() || null;
-  if (!body && !imageDriveFileId) {
+  const imageBytes = input.imageBytes ?? null;
+  if (!body && !imageBytes) {
     throw new PromotionError("A promotion needs a message, an image, or both.");
   }
 
@@ -159,18 +200,30 @@ export async function createPromotionDraft(input: {
       gymId: input.gymId,
       createdByUserId: input.createdByUserId ?? null,
       body,
-      imageDriveFileId,
-      imageMime: imageDriveFileId ? (input.imageMime?.trim() || null) : null,
       hasText: body !== null,
-      hasImage: imageDriveFileId !== null,
+      hasImage: false,
     })
     .returning();
-  return mapPromotion(row!);
+
+  if (!imageBytes) return mapPromotion(row!);
+
+  try {
+    await uploadPromoImage(row!.id, imageBytes, input.imageMime?.trim() || "");
+  } catch (error) {
+    if (error instanceof PromoMediaError) throw new PromotionError(error.message);
+    throw error;
+  }
+  const [withImage] = await db
+    .select(promotionColumns)
+    .from(promotions)
+    .where(eq(promotions.id, row!.id))
+    .limit(1);
+  return mapPromotion(withImage!);
 }
 
 export async function getPromotion(id: string): Promise<Promotion | null> {
   const [row] = await db
-    .select()
+    .select(promotionColumns)
     .from(promotions)
     .where(eq(promotions.id, id))
     .limit(1);
@@ -183,7 +236,7 @@ export async function getPromotionForGym(
   id: string,
 ): Promise<Promotion | null> {
   const [row] = await db
-    .select()
+    .select(promotionColumns)
     .from(promotions)
     .where(and(eq(promotions.id, id), eq(promotions.gymId, gymId)))
     .limit(1);
@@ -192,7 +245,7 @@ export async function getPromotionForGym(
 
 export async function listPromotionsForGym(gymId: string): Promise<Promotion[]> {
   const rows = await db
-    .select()
+    .select(promotionColumns)
     .from(promotions)
     .where(eq(promotions.gymId, gymId))
     .orderBy(desc(promotions.createdAt));
@@ -209,7 +262,7 @@ export async function listPromotionsByStatus(
   const list = Array.isArray(status) ? status : [status];
   if (list.length === 0) return [];
   const rows = await db
-    .select()
+    .select(promotionColumns)
     .from(promotions)
     .where(inArray(promotions.status, list))
     .orderBy(desc(promotions.createdAt));
@@ -414,7 +467,7 @@ export async function listPromotionsCreatedBy(
   userId: string,
 ): Promise<Promotion[]> {
   const rows = await db
-    .select()
+    .select(promotionColumns)
     .from(promotions)
     .where(
       and(
@@ -650,7 +703,7 @@ export async function listPromotionsWithGym(
   statuses?: PromotionStatus[],
 ): Promise<PromotionWithGym[]> {
   const rows = await db
-    .select({ promotion: promotions, gymName: gyms.name, gymSlug: gyms.slug })
+    .select({ promotion: promotionColumns, gymName: gyms.name, gymSlug: gyms.slug })
     .from(promotions)
     .innerJoin(gyms, eq(gyms.id, promotions.gymId))
     .where(

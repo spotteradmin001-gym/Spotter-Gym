@@ -47,7 +47,7 @@ export async function composePromotionAction(
       gymId,
       createdByUserId: user.id,
       body: parsed.body,
-      imageDriveFileId: parsed.imageDriveFileId,
+      imageBytes: parsed.imageBytes,
       imageMime: parsed.imageMime,
     });
     await replacePromotionRecipients(draft.id, parsed.recipients);
