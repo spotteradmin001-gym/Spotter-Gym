@@ -103,6 +103,21 @@ downscale; first reward-cron run scores one closed cycle, no backfill.
   the choice; exactly one → no dropdown; zero → buttons disabled with a "No owner
   phone on file." note. Owner accounts have no name column, so the option label
   uses the account email.
+- **R.4 — promo image: Neon `bytea` storage + delete-after-send.** PR #56.
+  Migration `0018` (additive) adds `promotions.image_bytes` / `image_stored_at`
+  / `image_deleted_at`; `image_drive_file_id` kept but no longer written. The
+  Google Drive backend of `lib/promo-media.ts` is gone (JWT/Drive code, both
+  env vars). `uploadPromoImage(promotionId, …)` / `fetchPromoImage` /
+  `deletePromoImage` / `purgeStaleePromoImages` all work on the row. The media
+  route gains `DELETE`; the engine downloads a promotion's image once to
+  `engine/.cache/`, base64s it per recipient, and `DELETE`s it (remote + local)
+  when the promotion reaches a terminal status. The daily `plan-reminders` cron
+  calls `purgeStaleePromoImages()` as a backstop. Interpretation calls:
+  (a) kept the coordinator's spelling `purgeStaleePromoImages` (double-e) as the
+  exported name; (b) `createPromotionDraft` now takes `imageBytes` and delegates
+  the write to `uploadPromoImage` (compose no longer uploads, it hands the bytes
+  back); (c) the engine treats a 404 from the media route like a 503 —
+  text-only, image `skipped`.
 
 ## Test infrastructure note (not a decision — a known nuisance)
 

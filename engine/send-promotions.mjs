@@ -19,7 +19,7 @@
  *   PROMO_MEDIA_SECRET  Bearer secret for that endpoint
  *   MAX_ATTEMPTS        part-send tries before it is marked failed, default 3
  */
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -36,6 +36,7 @@ import {
   withinSendWindow,
 } from "./promotions.mjs";
 import {
+  deletePromoMedia,
   fetchPromoMedia,
   sendImageViaWaha,
   sendViaWaha,
@@ -62,6 +63,47 @@ const PROMO_MEDIA_SECRET = process.env.PROMO_MEDIA_SECRET || "";
 const MAX_ATTEMPTS = Number(process.env.MAX_ATTEMPTS || 3);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const CACHE_DIR = join(here, ".cache");
+
+function extForMime(mimetype) {
+  if (mimetype === "image/png") return "png";
+  if (mimetype === "image/webp") return "webp";
+  return "jpg";
+}
+
+/**
+ * Download a promotion's image once and stash it under engine/.cache. Every
+ * recipient's image part is then base64'd from the local file — one GET per
+ * promotion per run, not one per recipient. Returns:
+ *   { disabled: true }            media endpoint 404/503 → send text-only
+ *   { ok: false, error }          transient fetch failure → retry the part
+ *   { ok: true, file, mimetype }  ready to send
+ */
+async function cachePromoImage(promotionId) {
+  const media = await fetchPromoMedia({
+    appUrl: APP_URL,
+    secret: PROMO_MEDIA_SECRET,
+    promotionId,
+  });
+  if (media.disabled) return { disabled: true };
+  if (!media.ok) return { ok: false, error: media.error };
+
+  mkdirSync(CACHE_DIR, { recursive: true });
+  const file = join(CACHE_DIR, `promo-${promotionId}.${extForMime(media.mimetype)}`);
+  writeFileSync(file, Buffer.from(media.base64, "base64"));
+  return { ok: true, file, mimetype: media.mimetype };
+}
+
+function discardPromoImageCache(cached) {
+  if (cached && cached.ok && cached.file) {
+    try {
+      rmSync(cached.file, { force: true });
+    } catch {
+      /* ignore */
+    }
+  }
+}
 
 if (!DATABASE_URL) {
   console.error("DATABASE_URL is not set. See engine/.env.example.");
@@ -162,6 +204,18 @@ async function processPromotion(pool, promo) {
   let failed = 0;
   let promoSends = 0;
 
+  // One media download per promotion per run — cached locally, base64'd from
+  // the file for each recipient below.
+  let promoImage = null;
+  if (promo.has_image) {
+    promoImage = await cachePromoImage(promo.id);
+    if (promoImage.disabled) {
+      console.log(`  promo ${promo.id}: image unavailable → sending text-only`);
+    } else if (!promoImage.ok) {
+      console.log(`  promo ${promo.id}: image fetch failed (${promoImage.error}); retry next run`);
+    }
+  }
+
   for (const rec of recipients) {
     if (budget <= 0) break;
 
@@ -232,39 +286,34 @@ async function processPromotion(pool, promo) {
       await sleep(randomGapMs());
     }
 
-    // Image part — fetch the bytes from our own endpoint, base64, send.
+    // Image part — base64 from the local cache file, send (WAHA never sees a URL).
     if (plan.image === "send" && rec.image_status === "pending" && budget > 0) {
-      const media = await fetchPromoMedia({
-        appUrl: APP_URL,
-        secret: PROMO_MEDIA_SECRET,
-        promotionId: promo.id,
-      });
-      if (media.disabled) {
+      if (!promoImage || promoImage.disabled) {
         await setPart(
           pool,
           rec.id,
           "image",
           "skipped",
           null,
-          "media endpoint not configured",
+          "image not available at send time",
           attempts,
         );
-        console.log(`  ${rec.phone} image → skipped (media disabled)`);
-      } else if (!media.ok) {
+        console.log(`  ${rec.phone} image → skipped (media unavailable)`);
+      } else if (!promoImage.ok) {
         const nx = nextPartStatus({ attempts, ok: false, maxAttempts: MAX_ATTEMPTS });
         attempts = nx.attempts;
-        await setPart(pool, rec.id, "image", nx.status, null, media.error, attempts);
+        await setPart(pool, rec.id, "image", nx.status, null, promoImage.error, attempts);
         attempted += 1;
         failed += 1;
-        console.log(`  ${rec.phone} image → ${nx.status} (${media.error})`);
+        console.log(`  ${rec.phone} image → ${nx.status} (${promoImage.error})`);
       } else {
         const r = await sendImageViaWaha({
           wahaUrl: WAHA_URL,
           apiKey: WAHA_API_KEY,
           session,
           chatId: to,
-          base64: media.base64,
-          mimetype: media.mimetype,
+          base64: readFileSync(promoImage.file).toString("base64"),
+          mimetype: promoImage.mimetype,
           filename: `promo-${promo.id}`,
         });
         const nx = nextPartStatus({ attempts, ok: r.ok, maxAttempts: MAX_ATTEMPTS });
@@ -347,6 +396,22 @@ async function processPromotion(pool, promo) {
     console.log(
       `  promo ${promo.id} → ${final.status}; billed ${final.billedTotalPaise} refund ${final.refundPaise} (${final.settlement})`,
     );
+
+    // Terminal this run → the image has done its job. Delete it from the app
+    // and drop the local cache file; the daily purge is the backstop.
+    if (promo.has_image) {
+      const del = await deletePromoMedia({
+        appUrl: APP_URL,
+        secret: PROMO_MEDIA_SECRET,
+        promotionId: promo.id,
+      });
+      if (!del.ok) {
+        console.log(
+          `  promo ${promo.id}: image delete failed (${del.error}); daily purge will catch it`,
+        );
+      }
+      discardPromoImageCache(promoImage);
+    }
   } else {
     console.log(`  promo ${promo.id}: ${promoSends} sent this run, more to go`);
   }

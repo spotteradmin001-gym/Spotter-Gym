@@ -1,50 +1,43 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/db/queries", () => ({ getPromotion: vi.fn() }));
 vi.mock("@/lib/promo-media", () => ({
   isPromoMediaSecretSet: vi.fn(),
   isAuthorizedPromoMedia: vi.fn(),
   fetchPromoImage: vi.fn(),
-  PromoMediaError: class PromoMediaError extends Error {},
+  deletePromoImage: vi.fn(),
 }));
 
-import { getPromotion } from "@/db/queries";
 import {
+  deletePromoImage,
   fetchPromoImage,
   isAuthorizedPromoMedia,
   isPromoMediaSecretSet,
 } from "@/lib/promo-media";
 
-import { GET } from "./route";
+import { DELETE, GET } from "./route";
 
 const mocked = {
-  getPromotion: vi.mocked(getPromotion),
   isPromoMediaSecretSet: vi.mocked(isPromoMediaSecretSet),
   isAuthorizedPromoMedia: vi.mocked(isAuthorizedPromoMedia),
   fetchPromoImage: vi.mocked(fetchPromoImage),
+  deletePromoImage: vi.mocked(deletePromoImage),
 };
 
-function call(promotionId = "p1") {
-  return GET(new Request(`https://x/api/promo-media/${promotionId}`), {
-    params: Promise.resolve({ promotionId }),
-  });
+function req(method: "GET" | "DELETE", promotionId = "p1") {
+  return [
+    new Request(`https://x/api/promo-media/${promotionId}`, { method }),
+    { params: Promise.resolve({ promotionId }) },
+  ] as const;
 }
-
-type Promo = NonNullable<Awaited<ReturnType<typeof getPromotion>>>;
-const withImage = {
-  id: "p1",
-  imageDriveFileId: "drive-1",
-  imageMime: "image/png",
-} as unknown as Promo;
 
 beforeEach(() => {
   mocked.isPromoMediaSecretSet.mockReturnValue(true);
   mocked.isAuthorizedPromoMedia.mockReturnValue(true);
-  mocked.getPromotion.mockResolvedValue(withImage);
   mocked.fetchPromoImage.mockResolvedValue({
     bytes: Buffer.from([1, 2, 3]),
     mime: "image/png",
   });
+  mocked.deletePromoImage.mockResolvedValue(undefined);
 });
 
 afterEach(() => vi.clearAllMocks());
@@ -52,40 +45,49 @@ afterEach(() => vi.clearAllMocks());
 describe("GET /api/promo-media/[promotionId]", () => {
   it("503 when the shared secret is unset", async () => {
     mocked.isPromoMediaSecretSet.mockReturnValue(false);
-    const res = await call();
+    const res = await GET(...req("GET"));
     expect(res.status).toBe(503);
     expect(mocked.fetchPromoImage).not.toHaveBeenCalled();
   });
 
   it("401 when the bearer token is wrong or missing", async () => {
     mocked.isAuthorizedPromoMedia.mockReturnValue(false);
-    expect((await call()).status).toBe(401);
+    expect((await GET(...req("GET"))).status).toBe(401);
   });
 
-  it("404 for an unknown promotion or one with no image part", async () => {
-    mocked.getPromotion.mockResolvedValueOnce(null);
-    expect((await call()).status).toBe(404);
-
-    mocked.getPromotion.mockResolvedValueOnce({
-      ...withImage,
-      imageDriveFileId: null,
-    } as unknown as Promo);
-    expect((await call()).status).toBe(404);
+  it("404 when there is no stored image", async () => {
+    mocked.fetchPromoImage.mockResolvedValueOnce(null);
+    expect((await GET(...req("GET"))).status).toBe(404);
   });
 
-  it("200 streams the Drive bytes with the promotion's mime", async () => {
-    const res = await call();
+  it("200 streams the bytes with the stored mime and no-store", async () => {
+    const res = await GET(...req("GET"));
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/png");
     expect(res.headers.get("cache-control")).toBe("no-store");
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(
       new Uint8Array([1, 2, 3]),
     );
-    expect(mocked.fetchPromoImage).toHaveBeenCalledWith("drive-1");
+    expect(mocked.fetchPromoImage).toHaveBeenCalledWith("p1");
+  });
+});
+
+describe("DELETE /api/promo-media/[promotionId]", () => {
+  it("503 when the shared secret is unset", async () => {
+    mocked.isPromoMediaSecretSet.mockReturnValue(false);
+    expect((await DELETE(...req("DELETE"))).status).toBe(503);
+    expect(mocked.deletePromoImage).not.toHaveBeenCalled();
   });
 
-  it("502 when Drive fails", async () => {
-    mocked.fetchPromoImage.mockRejectedValue(new Error("drive down"));
-    expect((await call()).status).toBe(502);
+  it("401 when the bearer token is wrong or missing", async () => {
+    mocked.isAuthorizedPromoMedia.mockReturnValue(false);
+    expect((await DELETE(...req("DELETE"))).status).toBe(401);
+    expect(mocked.deletePromoImage).not.toHaveBeenCalled();
+  });
+
+  it("204 and drops the image", async () => {
+    const res = await DELETE(...req("DELETE"));
+    expect(res.status).toBe(204);
+    expect(mocked.deletePromoImage).toHaveBeenCalledWith("p1");
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  deletePromoMedia,
   fetchPromoMedia,
   nextStatus,
   sendImageViaWaha,
@@ -175,19 +176,21 @@ describe("fetchPromoMedia", () => {
     expect(Buffer.from(r.base64, "base64")).toEqual(Buffer.from(bytes));
   });
 
-  it("503 → disabled (engine sends text-only, image skipped)", async () => {
-    const fetchImpl = async () => ({ ok: false, status: 503, text: async () => "" });
-    const r = await fetchPromoMedia({
-      appUrl: "https://app.example",
-      secret: "",
-      promotionId: "p1",
-      fetchImpl,
-    });
-    expect(r).toEqual({ ok: false, disabled: true, status: 503 });
+  it("503 or 404 → disabled (engine sends text-only, image skipped)", async () => {
+    for (const status of [503, 404]) {
+      const fetchImpl = async () => ({ ok: false, status, text: async () => "" });
+      const r = await fetchPromoMedia({
+        appUrl: "https://app.example",
+        secret: "",
+        promotionId: "p1",
+        fetchImpl,
+      });
+      expect(r).toEqual({ ok: false, disabled: true, status });
+    }
   });
 
-  it("other errors surface with the status", async () => {
-    const fetchImpl = async () => ({ ok: false, status: 404, text: async () => "nope" });
+  it("other errors surface with the status (caller retries the part)", async () => {
+    const fetchImpl = async () => ({ ok: false, status: 500, text: async () => "boom" });
     const r = await fetchPromoMedia({
       appUrl: "https://app.example",
       secret: "x",
@@ -195,6 +198,50 @@ describe("fetchPromoMedia", () => {
       fetchImpl,
     });
     expect(r.ok).toBe(false);
-    expect(r.status).toBe(404);
+    expect(r.disabled).toBeUndefined();
+    expect(r.status).toBe(500);
+  });
+});
+
+describe("deletePromoMedia", () => {
+  it("DELETEs the media endpoint with the bearer secret and returns ok on 204", async () => {
+    let seen;
+    const fetchImpl = async (url, init) => {
+      seen = { url, method: init.method, auth: init.headers.authorization };
+      return { ok: false, status: 204, text: async () => "" };
+    };
+    const r = await deletePromoMedia({
+      appUrl: "https://app.example/",
+      secret: "s3cr3t",
+      promotionId: "p1",
+      fetchImpl,
+    });
+    expect(seen).toEqual({
+      url: "https://app.example/api/promo-media/p1",
+      method: "DELETE",
+      auth: "Bearer s3cr3t",
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it("reports a non-2xx and never throws on a network error", async () => {
+    const bad = await deletePromoMedia({
+      appUrl: "https://app.example",
+      secret: "x",
+      promotionId: "p1",
+      fetchImpl: async () => ({ ok: false, status: 500, text: async () => "err" }),
+    });
+    expect(bad.ok).toBe(false);
+    expect(bad.status).toBe(500);
+
+    const threw = await deletePromoMedia({
+      appUrl: "https://app.example",
+      secret: "x",
+      promotionId: "p1",
+      fetchImpl: async () => {
+        throw new Error("offline");
+      },
+    });
+    expect(threw).toEqual({ ok: false, error: "offline" });
   });
 });

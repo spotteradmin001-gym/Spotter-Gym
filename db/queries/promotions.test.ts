@@ -93,7 +93,7 @@ dbSuite("createPromotionDraft", () => {
   it("derives the part flags — image only, and drops mime with no image", async () => {
     const img = await createPromotionDraft({
       gymId,
-      imageDriveFileId: "drive-file-1",
+      imageBytes: Buffer.from([1, 2, 3, 4]),
       imageMime: "image/jpeg",
     });
     expect(img.hasText).toBe(false);
@@ -105,6 +105,7 @@ dbSuite("createPromotionDraft", () => {
       body: "hi",
       imageMime: "image/png",
     });
+    expect(textOnly.hasImage).toBe(false);
     expect(textOnly.imageMime).toBeNull();
   });
 
@@ -170,7 +171,7 @@ dbSuite("replacePromotionRecipients", () => {
   it("replaces the list wholesale on a second call", async () => {
     const p = await createPromotionDraft({
       gymId,
-      imageDriveFileId: "drive-file-2",
+      imageBytes: Buffer.from([1, 2, 3, 4]),
       imageMime: "image/png",
     });
     await replacePromotionRecipients(p.id, [
@@ -308,7 +309,7 @@ dbSuite("admin transitions", () => {
     const p = await createPromotionDraft({
       gymId,
       body,
-      imageDriveFileId: perImage ? "drive-x" : null,
+      imageBytes: perImage ? Buffer.from([1, 2, 3, 4]) : null,
       imageMime: perImage ? "image/png" : null,
     });
     await replacePromotionRecipients(p.id, [

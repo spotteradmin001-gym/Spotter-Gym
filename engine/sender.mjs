@@ -130,9 +130,10 @@ export async function sendImageViaWaha({
 
 /**
  * Download a promotion's image bytes from the app's media endpoint and return
- * them base64-encoded, ready for `sendImageViaWaha`. A 503 means the media
- * feature is not configured (`PROMO_MEDIA_SECRET` unset) — the caller then
- * sends text-only and marks the image part `skipped`. Never throws.
+ * them base64-encoded, ready for `sendImageViaWaha`. A 503 (media not
+ * configured — `PROMO_MEDIA_SECRET` unset) or a 404 (image already deleted /
+ * purged) means there is nothing to send — the caller then sends text-only and
+ * marks the image part `skipped`. Never throws.
  */
 export async function fetchPromoMedia({
   appUrl,
@@ -145,7 +146,9 @@ export async function fetchPromoMedia({
       `${appUrl.replace(/\/$/, "")}/api/promo-media/${promotionId}`,
       { headers: { authorization: `Bearer ${secret ?? ""}` } },
     );
-    if (res.status === 503) return { ok: false, disabled: true, status: 503 };
+    if (res.status === 503 || res.status === 404) {
+      return { ok: false, disabled: true, status: res.status };
+    }
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       return {
@@ -164,6 +167,38 @@ export async function fetchPromoMedia({
       base64: buf.toString("base64"),
       mimetype: header.split(";")[0].trim(),
       status: 200,
+    };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Tell the app to drop a promotion's stored image bytes — called once the
+ * promotion reaches a terminal status this run, so the image never outlives the
+ * send. Best-effort: a failure is logged by the caller and the daily purge is
+ * the backstop. Never throws.
+ */
+export async function deletePromoMedia({
+  appUrl,
+  secret,
+  promotionId,
+  fetchImpl = fetch,
+}) {
+  try {
+    const res = await fetchImpl(
+      `${appUrl.replace(/\/$/, "")}/api/promo-media/${promotionId}`,
+      {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${secret ?? ""}` },
+      },
+    );
+    if (res.status === 204 || res.ok) return { ok: true, status: res.status };
+    const body = await res.text().catch(() => "");
+    return {
+      ok: false,
+      status: res.status,
+      error: `media DELETE ${res.status}: ${body.slice(0, 200)}`,
     };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };

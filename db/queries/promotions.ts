@@ -5,6 +5,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import { gyms, promotionRecipients, promotions } from "@/db/schema";
 import { estimate, partsPerRecipient } from "@/lib/promo-cost";
+import { PromoMediaError, uploadPromoImage } from "@/lib/promo-media";
 
 /** Caller-facing failures; the server-action layer maps this to user copy. */
 export class PromotionError extends Error {
@@ -136,20 +137,20 @@ function mapRecipient(
 }
 
 /**
- * Create a `draft` promotion. Content validation, recipient building, the money
- * steps and the send state machine are layered on in later Phase F batches;
- * this is the base row.
+ * Create a `draft` promotion. When `imageBytes` is supplied the bytes are
+ * stored inline on the new row via `uploadPromoImage` (R.4) — validation
+ * (type + 5 MB ceiling) happens there and surfaces as a `PromotionError`.
  */
 export async function createPromotionDraft(input: {
   gymId: string;
   createdByUserId?: string | null;
   body?: string | null;
-  imageDriveFileId?: string | null;
+  imageBytes?: Buffer | Uint8Array | null;
   imageMime?: string | null;
 }): Promise<Promotion> {
   const body = input.body?.trim() || null;
-  const imageDriveFileId = input.imageDriveFileId?.trim() || null;
-  if (!body && !imageDriveFileId) {
+  const imageBytes = input.imageBytes ?? null;
+  if (!body && !imageBytes) {
     throw new PromotionError("A promotion needs a message, an image, or both.");
   }
 
@@ -159,13 +160,25 @@ export async function createPromotionDraft(input: {
       gymId: input.gymId,
       createdByUserId: input.createdByUserId ?? null,
       body,
-      imageDriveFileId,
-      imageMime: imageDriveFileId ? (input.imageMime?.trim() || null) : null,
       hasText: body !== null,
-      hasImage: imageDriveFileId !== null,
+      hasImage: false,
     })
     .returning();
-  return mapPromotion(row!);
+
+  if (!imageBytes) return mapPromotion(row!);
+
+  try {
+    await uploadPromoImage(row!.id, imageBytes, input.imageMime?.trim() || "");
+  } catch (error) {
+    if (error instanceof PromoMediaError) throw new PromotionError(error.message);
+    throw error;
+  }
+  const [withImage] = await db
+    .select()
+    .from(promotions)
+    .where(eq(promotions.id, row!.id))
+    .limit(1);
+  return mapPromotion(withImage!);
 }
 
 export async function getPromotion(id: string): Promise<Promotion | null> {

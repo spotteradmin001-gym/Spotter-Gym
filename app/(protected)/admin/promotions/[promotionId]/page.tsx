@@ -116,9 +116,7 @@ export default async function AdminPromotionDetailPage({
           </div>
           <p className="text-sm">
             Image part:{" "}
-            {promo.hasImage
-              ? `yes — ${promo.imageMime ?? "image"} (drive id ${promo.imageDriveFileId})`
-              : "no"}
+            {promo.hasImage ? `yes — ${promo.imageMime ?? "image"}` : "no"}
           </p>
           <p className="text-sm">
             Owner contact: {ownerPhone ?? "no phone on file"}
