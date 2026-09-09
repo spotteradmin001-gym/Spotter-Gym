@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<title>Spotter Engine</title>
+<HTA:APPLICATION
+  ID="spotterEngine"
+  APPLICATIONNAME="Spotter Engine"
+  ICON="spotter-engine.ico"
+  BORDER="thin"
+  BORDERSTYLE="normal"
+  MAXIMIZEBUTTON="no"
+  SINGLEINSTANCE="yes"
+  SCROLL="no"
+  CONTEXTMENU="no"
+  INNERBORDER="no" />
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font: 13px "Segoe UI", Tahoma, sans-serif;
+    background: #0f172a; color: #e2e8f0; width: 640px; height: 560px;
+    overflow: hidden; user-select: none;
+  }
+  header { padding: 12px 16px; background: #16a34a; color: #fff; }
+  header h1 { margin: 0; font-size: 15px; font-weight: 600; }
+  header p  { margin: 2px 0 0; font-size: 11px; opacity: .9; }
+  .lights { display: flex; gap: 18px; padding: 10px 16px; background: #1e293b; }
+  .light  { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+  .dot {
+    width: 11px; height: 11px; border-radius: 50%;
+    background: #64748b; border: 1px solid rgba(255,255,255,.25);
+  }
+  .dot.on   { background: #22c55e; }
+  .dot.off  { background: #ef4444; }
+  .dot.warn { background: #f59e0b; }
+  .controls { display: flex; align-items: center; gap: 8px; padding: 12px 16px; }
+  button {
+    font: 13px "Segoe UI", sans-serif; padding: 7px 14px; border: 0;
+    border-radius: 6px; cursor: pointer; color: #fff; background: #334155;
+  }
+  button.primary { background: #16a34a; }
+  button.danger  { background: #b91c1c; }
+  button:disabled { opacity: .45; cursor: default; }
+  select {
+    font: 13px "Segoe UI", sans-serif; padding: 6px 8px; border-radius: 6px;
+    border: 1px solid #475569; background: #1e293b; color: #e2e8f0;
+  }
+  .summary { padding: 0 16px 8px; font-size: 12px; color: #94a3b8; min-height: 18px; }
+  #log {
+    margin: 0 16px 16px; height: 360px; width: 608px; resize: none;
+    background: #020617; color: #cbd5e1; border: 1px solid #1e293b;
+    border-radius: 6px; padding: 8px; font: 11px Consolas, monospace;
+    white-space: pre; overflow: auto;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Spotter Engine</h1>
+  <p>Sends payment reminders and approved promotions from this laptop through WAHA.</p>
+</header>
+
+<div class="lights">
+  <div class="light"><span id="dDocker" class="dot"></span> Docker</div>
+  <div class="light"><span id="dWaha" class="dot"></span> WAHA</div>
+  <div class="light"><span id="dLoop" class="dot"></span> <span id="loopText">Loop</span></div>
+</div>
+
+<div class="controls">
+  <button id="btnStart" class="primary" onclick="startLoop()">Start loop</button>
+  <button id="btnStop" class="danger" onclick="stopLoop()">Stop</button>
+  <button id="btnOnce" onclick="runOnce()">Run once now</button>
+  <span style="margin-left:6px">every</span>
+  <select id="interval">
+    <option value="5">5 min</option>
+    <option value="15" selected>15 min</option>
+    <option value="30">30 min</option>
+    <option value="60">60 min</option>
+  </select>
+</div>
+
+<div class="summary" id="summary">Idle. Press "Start loop" to begin.</div>
+<textarea id="log" readonly></textarea>
+
+<script language="JScript">
+var fso = new ActiveXObject("Scripting.FileSystemObject");
+var shell = new ActiveXObject("WScript.Shell");
+
+function launcherDir() {
+  var p = decodeURIComponent(location.pathname);
+  p = p.replace(/^\/+/, "").replace(/\//g, "\\");
+  return p.replace(/\\[^\\]*$/, "");
+}
+var DIR = launcherDir();
+var REPO = fso.GetParentFolderName(fso.GetParentFolderName(DIR)); // launcher -> engine -> repo
+var LOG = DIR + "\\engine.log";
+var STATUS = DIR + "\\status.json";
+
+function readFile(path) {
+  try {
+    if (!fso.FileExists(path)) return "";
+    // ADODB.Stream so UTF-8 log lines (arrows, dots, dashes) render correctly.
+    var s = new ActiveXObject("ADODB.Stream");
+    s.Type = 2;
+    s.Charset = "utf-8";
+    s.Open();
+    s.LoadFromFile(path);
+    var t = s.ReadText(-1);
+    s.Close();
+    return t;
+  } catch (e) { return ""; }
+}
+
+function readStatus() {
+  var raw = readFile(STATUS);
+  if (!raw) return null;
+  try { return eval("(" + raw + ")"); } catch (e) { return null; }
+}
+
+function writeStatusStopped() {
+  try {
+    var s = readStatus() || {};
+    var f = fso.CreateTextFile(STATUS, true);
+    f.Write("{\"running\":false,\"lastSummary\":\"stopped\",\"pid\":" + (s.pid || 0) + "}");
+    f.Close();
+  } catch (e) {}
+}
+
+function setDot(id, state) {
+  document.getElementById(id).className = "dot " + state;
+}
+
+function startLoop() {
+  var every = document.getElementById("interval").value;
+  shell.CurrentDirectory = REPO;
+  shell.Run('cmd /c node "engine\\launcher\\run-engine.mjs" --loop --every ' + every, 0, false);
+  document.getElementById("summary").innerText = "Starting Docker + WAHA, then the first cycle...";
+}
+
+function runOnce() {
+  shell.CurrentDirectory = REPO;
+  shell.Run('cmd /c node "engine\\launcher\\run-engine.mjs" --once', 0, false);
+  document.getElementById("summary").innerText = "Running one cycle now...";
+}
+
+function stopLoop() {
+  var st = readStatus();
+  if (st && st.pid) {
+    try { shell.Run("taskkill /PID " + st.pid + " /T /F", 0, true); } catch (e) {}
+  }
+  writeStatusStopped();
+  document.getElementById("summary").innerText = "Loop stopped.";
+}
+
+// Old JScript Date.parse does not do ISO 8601 reliably, so parse it by hand.
+function isoToMs(iso) {
+  var m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+  if (!m) return NaN;
+  return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+}
+
+function overdueBy(iso, slackMs) {
+  var t = isoToMs(iso);
+  if (isNaN(t)) return false;
+  return (new Date().getTime() - t) > slackMs;
+}
+
+function tick() {
+  var st = readStatus();
+  var running = !!(st && st.running);
+
+  setDot("dDocker", st && st.dockerUp ? "on" : (st ? "off" : ""));
+  setDot("dWaha", st && st.wahaUp ? "on" : (st ? "off" : ""));
+
+  if (!st) {
+    setDot("dLoop", "");
+    document.getElementById("loopText").innerText = "Loop";
+  } else if (running && st.mode === "loop") {
+    var overdue = overdueBy(st.nextCycleAt, 5 * 60 * 1000);
+    setDot("dLoop", overdue ? "warn" : "on");
+    document.getElementById("loopText").innerText = overdue ? "Loop (stalled?)" : "Loop (running)";
+  } else if (running) {
+    setDot("dLoop", "on");
+    document.getElementById("loopText").innerText = "Running once";
+  } else {
+    setDot("dLoop", "off");
+    document.getElementById("loopText").innerText = "Loop (stopped)";
+  }
+
+  document.getElementById("btnStart").disabled = running;
+  document.getElementById("btnStop").disabled = !running;
+  document.getElementById("btnOnce").disabled = running;
+
+  if (st && st.lastSummary) {
+    var extra = st.lastCycleAt
+      ? "  (last cycle " + String(st.lastCycleAt).replace("T", " ").substr(0, 19) + ")"
+      : "";
+    document.getElementById("summary").innerText = st.lastSummary + extra;
+  }
+
+  var lines = readFile(LOG).split(/\r?\n/);
+  if (lines.length > 200) lines = lines.slice(lines.length - 200);
+  var box = document.getElementById("log");
+  var atBottom = (box.scrollTop + box.clientHeight) >= (box.scrollHeight - 20);
+  box.value = lines.join("\n");
+  if (atBottom) box.scrollTop = box.scrollHeight;
+}
+
+window.onload = function () {
+  tick();
+  window.setInterval(tick, 2000);
+};
+</script>
+</body>
+</html>
