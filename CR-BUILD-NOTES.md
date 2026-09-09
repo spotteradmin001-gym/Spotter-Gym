@@ -2,8 +2,29 @@
 
 Built across PRs #27–#52 following `SPOTTER_CR_PLAN.md`. Every locked decision
 in `changes.md` was followed. The points below are places where the build had
-to interpret a gap or make a call the spec did not pin down — review them and
-say if any should change.
+to interpret a gap or make a call the spec did not pin down.
+
+## Owner review outcome (2026-09-09)
+
+Reviewed. Kept as-built: per-message pricing in paise; image-fetch failure →
+text still sends, image `skipped`, not charged; JPEG/PNG/WebP + 5 MB + no
+downscale; first reward-cron run scores one closed cycle, no backfill.
+
+**Three changes requested — built as PRs #53+ (see "Post-review revisions"):**
+
+1. **Streak reward auto-slides.** When the cycle-N+2 due is already paid in
+   full (or absent), the reward applies to the member's **next unpaid due**
+   instead of sitting as a manual pending credit.
+2. **No schedule lock.** The per-cycle lock on closed-weekday / holiday edits
+   is removed. Any change to a gym's weekly closed days or one-off holidays
+   takes effect **immediately** and every affected member's calendar, current
+   streak, and reward eligibility recompute from the current config —
+   including for the current and past cycles. (Accepted tradeoff: an owner can
+   retroactively change a finished cycle's rest-days and thereby revoke a
+   reward a member believed was earned.)
+3. **Owner picker on quote / bill send.** If a gym has more than one owner
+   with a phone on file, the admin promotion page shows a dropdown to choose
+   which owner the `wa.me` quote / bill link targets. One owner → no dropdown.
 
 ## CR-6 — credentials
 
