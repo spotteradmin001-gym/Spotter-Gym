@@ -96,6 +96,13 @@ downscale; first reward-cron run scores one closed cycle, no backfill.
   streak / not-yet-scored reward cycles already read `closedDates(...)` live, so
   a schedule edit takes effect immediately. Already-written `earned` / `missed`
   reward rows are historical and not rewritten.
+- **R.3 — owner picker on quote / bill send.** PR #55. `lib/promo-owner-contact.ts`
+  (`maskPhone`, `ownerContactChoices`, `selectedOwnerPhone` — pure + tested) plus a
+  client `OwnerContactPicker`. More than one owner with a phone → a `<select>`
+  (email + masked phone) above the buttons, `wa.me` link rebuilt client-side from
+  the choice; exactly one → no dropdown; zero → buttons disabled with a "No owner
+  phone on file." note. Owner accounts have no name column, so the option label
+  uses the account email.
 
 ## Test infrastructure note (not a decision — a known nuisance)
 
