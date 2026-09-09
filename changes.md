@@ -778,6 +778,69 @@ budget.
 
 ---
 
+## CR-12 — Desktop launcher UI for the local engine
+
+**Raised:** 2026-09-09, during the post-CR production smoke test.
+**Approved for build 2026-09-09.**
+
+### Problem
+
+The reminder + promotions engine on the laptop is run today with a raw
+PowerShell command (`engine/start-engine.ps1 -Loop -EveryMinutes 15`). The
+operator has to remember the command, keep a terminal open, and read scrolling
+stdout to know whether sends are going through. Not something a non-technical
+person can be handed.
+
+### Desired behaviour
+
+A small double-clickable Windows app the operator can pin to the taskbar / put
+on the desktop (and optionally the Startup folder) that:
+
+- **Start / Stop** the 15-minute send loop (interval selectable: 5 / 15 / 30 /
+  60 min).
+- **Run once now** button for an immediate cycle.
+- Brings up the local Docker stack (`docker compose up -d`) and waits for WAHA
+  before the first cycle — same as `start-engine.ps1`.
+- Shows three status lights: Docker up, WAHA reachable, loop running.
+- Shows a live log pane (tail of the engine log) so the operator can see
+  `reminder → sent`, `promo <phone> text → sent`, failures, and the
+  "outside 09:00–20:00" / "budget exhausted" notices.
+- Survives being minimised; the loop keeps running.
+
+### Scope (engine-local, not deployed, not in CI build)
+
+- `engine/launcher/run-engine.mjs` — Node daemon. `--once` or
+  `--loop --every <min>`. Starts Docker, waits for WAHA (`GET /api/sessions`
+  with the key from `engine/.env`), then each cycle spawns
+  `node engine/send-reminders.mjs` + `node engine/send-promotions.mjs`,
+  appends timestamped output to `engine/launcher/engine.log`, and writes
+  `engine/launcher/status.json` (`pid`, `mode`, `everyMinutes`, `dockerUp`,
+  `wahaUp`, `lastCycleAt`, `nextCycleAt`, `lastSummary`, `running`). Clean
+  exit on SIGINT/SIGTERM.
+- `engine/launcher/launcher.mjs` — pure helpers (`parseArgs`,
+  `clampEveryMinutes`, `summariseCycle`, `tailLines`), unit-tested in
+  `engine/launcher/launcher.test.mjs` (picked up by the existing
+  `engine/**/*.test.mjs` vitest glob).
+- `engine/launcher/Spotter Engine.hta` — the GUI. Plain HTA (Windows
+  `mshta.exe`, zero install). Buttons wired to `run-engine.mjs` via
+  `WScript.Shell`; Stop = `taskkill` the pid from `status.json`; polls
+  `status.json` + `engine.log` every 2 s.
+- `engine/launcher/spotter-engine.ico` — generated icon so the taskbar pin
+  looks intentional.
+- `engine/launcher/README.md` — pin-to-taskbar + add-to-Startup steps.
+- `.gitignore` — `engine/launcher/engine.log`, `engine/launcher/status.json`.
+- No schema change, no app change, no production step. Own branch + PR; CI
+  `verify` covers the new `launcher.test.mjs`.
+
+### Note
+
+HTA is old but has no runtime dependency and works on Windows 11 — the right
+trade for a single-operator internal tool. If a true system-tray icon is
+wanted later, `systray2` (npm, ships a helper binary) is the upgrade path with
+the same `run-engine.mjs` underneath.
+
+---
+
 ## CR-11 — Admin can approve + mark-paid a promotion on the owner's behalf
 
 **Raised:** 2026-09-09, during the post-CR production smoke test.
