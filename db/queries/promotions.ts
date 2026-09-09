@@ -638,6 +638,48 @@ export async function markPromotionPaid(input: {
 }
 
 /**
+ * Admin fast-path (CR-11). The gym owner often prepays the estimate offline
+ * but forgets to click "Approve estimate" / "I have prepaid", stranding the
+ * promotion at `priced`. Once the money has actually landed the admin runs
+ * this to walk `priced → approved → (prepaid_paise set) → paid` in one step,
+ * on the owner's behalf. The owner-side buttons are unchanged — this only
+ * covers the stalled case.
+ */
+export async function adminForcePromotionPaid(input: {
+  promotionId: string;
+}): Promise<Promotion> {
+  const promo = await loadPromotionOrThrow(input.promotionId);
+  if (promo.status !== "priced") {
+    throw new PromotionError(
+      "Only a priced promotion can be marked paid on the owner's behalf.",
+    );
+  }
+  if (promo.estimatedTotalPaise == null) {
+    throw new PromotionError("This promotion has no estimate yet.");
+  }
+  const now = new Date();
+  const [row] = await db
+    .update(promotions)
+    .set({
+      status: "paid",
+      approvedAt: now,
+      prepaidPaise: promo.estimatedTotalPaise,
+      paidAt: now,
+      updatedAt: now,
+    })
+    .where(
+      and(eq(promotions.id, input.promotionId), eq(promotions.status, "priced")),
+    )
+    .returning();
+  if (!row) {
+    throw new PromotionError(
+      "Only a priced promotion can be marked paid on the owner's behalf.",
+    );
+  }
+  return mapPromotion(row);
+}
+
+/**
  * Admin releases a paid promotion to the engine. paid → sending. The engine
  * (Batch F.6) then works through `promotion_recipients` day by day.
  */

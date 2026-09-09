@@ -24,6 +24,7 @@ import {
 } from "@/lib/wa-templates";
 
 import {
+  forcePromotionPaidAction,
   markPromotionPaidAction,
   markPromotionRefundedAction,
   rejectPromotionAction,
@@ -163,6 +164,15 @@ export default async function AdminPromotionDetailPage({
                 <input type="hidden" name="promotionId" value={promo.id} />
                 <Button type="submit" size="sm" variant="destructive">
                   Reject
+                </Button>
+              </form>
+            )}
+            {promo.status === "priced" && promo.estimatedTotalPaise != null && (
+              <form action={forcePromotionPaidAction}>
+                <input type="hidden" name="promotionId" value={promo.id} />
+                <Button type="submit" size="sm">
+                  Approve &amp; mark paid on owner&apos;s behalf (
+                  {formatPaise(promo.estimatedTotalPaise)})
                 </Button>
               </form>
             )}

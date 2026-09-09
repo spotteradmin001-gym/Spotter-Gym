@@ -18,6 +18,7 @@ import { createMember } from "./members";
 import {
   PromotionError,
   acknowledgePromotionPrepaid,
+  adminForcePromotionPaid,
   approvePromotionEstimate,
   cancelPromotion,
   createPromotionDraft,
@@ -369,6 +370,30 @@ dbSuite("admin transitions", () => {
     const paid = await markPromotionPaid({ promotionId: id });
     expect(paid.status).toBe("paid");
 
+    const sending = await startPromotionSending({ promotionId: id });
+    expect(sending.status).toBe("sending");
+  });
+
+  it("adminForcePromotionPaid walks priced → paid, only from priced (CR-11)", async () => {
+    const id = await submitted();
+
+    await expect(
+      adminForcePromotionPaid({ promotionId: id }),
+    ).rejects.toThrow(/priced/i);
+
+    await pricePromotion({ promotionId: id, perMessagePaise: 25 });
+    const paid = await adminForcePromotionPaid({ promotionId: id });
+    expect(paid.status).toBe("paid");
+    expect(paid.prepaidPaise).toBe(paid.estimatedTotalPaise);
+    expect(paid.approvedAt).not.toBeNull();
+    expect(paid.paidAt).not.toBeNull();
+
+    // stale button — status already moved on
+    await expect(
+      adminForcePromotionPaid({ promotionId: id }),
+    ).rejects.toThrow(/priced/i);
+
+    // the engine can pick it straight up
     const sending = await startPromotionSending({ promotionId: id });
     expect(sending.status).toBe("sending");
   });
