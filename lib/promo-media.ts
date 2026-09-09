@@ -14,7 +14,7 @@ import { promotions } from "@/db/schema";
  * ephemeral: the local WAHA engine downloads it once through
  * `GET /api/promo-media/[promotionId]` (which calls `fetchPromoImage`),
  * base64-encodes it for WAHA, and `DELETE`s it (→ `deletePromoImage`) as soon
- * as the promotion reaches a terminal status. `purgeStaleePromoImages` is a
+ * as the promotion reaches a terminal status. `purgeStalePromoImages` is a
  * daily backstop for anything the engine left behind.
  *
  * `PROMO_MEDIA_SECRET` unset → the media route returns 503 and the engine sends
@@ -166,7 +166,7 @@ export async function deletePromoImage(promotionId: string): Promise<void> {
  * engine did not clean up and that finished more than a week ago. Returns how
  * many rows were purged.
  */
-export async function purgeStaleePromoImages(
+export async function purgeStalePromoImages(
   asOf: Date = new Date(),
 ): Promise<number> {
   const cutoff = new Date(asOf.getTime() - PURGE_AFTER_MS);

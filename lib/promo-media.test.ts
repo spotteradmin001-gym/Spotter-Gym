@@ -1,7 +1,7 @@
 /**
  * `assertValidPromoImage` + the config guards are pure and always run. The
  * storage lifecycle (`uploadPromoImage` / `fetchPromoImage` / `deletePromoImage`
- * / `purgeStaleePromoImages`) hits the Neon `preview` branch and is skipped when
+ * / `purgeStalePromoImages`) hits the Neon `preview` branch and is skipped when
  * DATABASE_URL is unset. FIND-MY-FIXTURE: gym name `test_media %`.
  */
 import { eq, like } from "drizzle-orm";
@@ -20,7 +20,7 @@ import {
   isPromoMediaSecretSet,
   MAX_PROMO_IMAGE_BYTES,
   PromoMediaError,
-  purgeStaleePromoImages,
+  purgeStalePromoImages,
   uploadPromoImage,
 } from "./promo-media";
 
@@ -162,7 +162,7 @@ dbSuite("promo image storage lifecycle", () => {
     ).rejects.toThrow(/no longer exists/);
   });
 
-  it("purgeStaleePromoImages only touches terminal, old, non-null rows", async () => {
+  it("purgeStalePromoImages only touches terminal, old, non-null rows", async () => {
     const old = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const recent = new Date(Date.now() - 60 * 1000);
 
@@ -183,7 +183,7 @@ dbSuite("promo image storage lifecycle", () => {
       .set({ updatedAt: old })
       .where(eq(promotions.id, oldSending));
 
-    const purged = await purgeStaleePromoImages();
+    const purged = await purgeStalePromoImages();
     expect(purged).toBeGreaterThanOrEqual(2);
 
     expect(await fetchPromoImage(oldSent)).toBeNull();

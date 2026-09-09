@@ -108,15 +108,16 @@ downscale; first reward-cron run scores one closed cycle, no backfill.
   / `image_deleted_at`; `image_drive_file_id` kept but no longer written. The
   Google Drive backend of `lib/promo-media.ts` is gone (JWT/Drive code, both
   env vars). `uploadPromoImage(promotionId, …)` / `fetchPromoImage` /
-  `deletePromoImage` / `purgeStaleePromoImages` all work on the row. The media
+  `deletePromoImage` / `purgeStalePromoImages` all work on the row. The media
   route gains `DELETE`; the engine downloads a promotion's image once to
   `engine/.cache/`, base64s it per recipient, and `DELETE`s it (remote + local)
   when the promotion reaches a terminal status. The daily `plan-reminders` cron
-  calls `purgeStaleePromoImages()` as a backstop. Interpretation calls:
-  (a) kept the coordinator's spelling `purgeStaleePromoImages` (double-e) as the
-  exported name; (b) `createPromotionDraft` now takes `imageBytes` and delegates
-  the write to `uploadPromoImage` (compose no longer uploads, it hands the bytes
-  back); (c) the engine treats a 404 from the media route like a 503 —
+  calls `purgeStalePromoImages()` as a backstop. Read queries in
+  `db/queries/promotions.ts` use a shared `promotionColumns` projection that
+  omits `image_bytes` — only `fetchPromoImage` ever selects the blob.
+  Interpretation calls: (a) `createPromotionDraft` now takes `imageBytes` and
+  delegates the write to `uploadPromoImage` (compose no longer uploads, it hands
+  the bytes back); (b) the engine treats a 404 from the media route like a 503 —
   text-only, image `skipped`.
 
 ## Test infrastructure note (not a decision — a known nuisance)

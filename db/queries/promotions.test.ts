@@ -114,6 +114,23 @@ dbSuite("createPromotionDraft", () => {
       PromotionError,
     );
   });
+
+  it("read queries never carry image_bytes", async () => {
+    const img = await createPromotionDraft({
+      gymId,
+      imageBytes: Buffer.from([5, 5, 5, 5]),
+      imageMime: "image/png",
+    });
+    expect(img).not.toHaveProperty("imageBytes");
+
+    const got = await getPromotion(img.id);
+    expect(got).not.toHaveProperty("imageBytes");
+    expect(got?.hasImage).toBe(true);
+
+    const listed = (await listPromotionsForGym(gymId)).find((p) => p.id === img.id);
+    expect(listed).toBeDefined();
+    expect(listed).not.toHaveProperty("imageBytes");
+  });
 });
 
 dbSuite("lookup + listing", () => {

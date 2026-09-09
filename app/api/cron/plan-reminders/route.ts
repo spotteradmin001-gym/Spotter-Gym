@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { planRemindersForAllGyms } from "@/db/queries";
 import { isAuthorizedCron } from "@/lib/cron";
-import { purgeStaleePromoImages } from "@/lib/promo-media";
+import { purgeStalePromoImages } from "@/lib/promo-media";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
   let purgedPromoImages = 0;
   try {
-    purgedPromoImages = await purgeStaleePromoImages();
+    purgedPromoImages = await purgeStalePromoImages();
   } catch {
     // best-effort backstop; the engine deletes images inline on terminal status
   }
