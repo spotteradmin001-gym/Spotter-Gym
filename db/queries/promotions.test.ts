@@ -61,7 +61,19 @@ if (process.env.DATABASE_URL) {
     ).id;
   });
   afterAll(async () => {
-    for (const id of createdGymIds) {
+    // Resolve every fixture gym by name prefix, not just the ids this run
+    // tracked. A prior interrupted run can leave `test_promo` gyms +
+    // promotions behind on the shared preview branch, and the plain
+    // name-prefix gym delete below then trips the promotions FK (RESTRICT).
+    // Clearing children for all of them keeps the suite self-healing.
+    const staleGyms = await db
+      .select({ id: gyms.id })
+      .from(gyms)
+      .where(like(gyms.name, "test_promo %"));
+    const gymIds = [
+      ...new Set([...createdGymIds, ...staleGyms.map((g) => g.id)]),
+    ];
+    for (const id of gymIds) {
       const promoRows = await db
         .select({ id: promotions.id })
         .from(promotions)
