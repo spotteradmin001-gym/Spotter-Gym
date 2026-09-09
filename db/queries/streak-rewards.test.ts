@@ -190,4 +190,92 @@ dbSuite("applyDueStreakDiscounts", () => {
     );
     expect(octDueAfter?.amountDuePaise).toBe(90_000);
   });
+
+  it("slides to the next pending due when the redeem-period due is already paid", async () => {
+    const gymId = await seedGym("test_reward Slide", 10);
+    cleanupGymIds.push(gymId);
+    const m = await createMember({
+      gymId,
+      name: "test_reward Frank",
+      phone: "9700000006",
+      joinDate: "2026-01-01",
+    });
+    await addCheckins(gymId, m.id, augustOpenDays());
+    await evaluateStreakRewardsForGym(gymId, AS_OF);
+
+    // Oct (redeem period) due already settled; Nov due still pending.
+    await db.insert(dues).values([
+      {
+        memberId: m.id,
+        gymId,
+        periodMonth: "2026-10-01",
+        dueDate: "2026-10-01",
+        amountDuePaise: 100_000,
+        status: "paid",
+      },
+      {
+        memberId: m.id,
+        gymId,
+        periodMonth: "2026-11-01",
+        dueDate: "2026-11-01",
+        amountDuePaise: 100_000,
+        status: "pending",
+      },
+    ]);
+
+    expect((await applyDueStreakDiscounts(gymId)).applied).toBe(1);
+
+    const dueRows = await listDuesForMember(gymId, m.id);
+    const octDue = dueRows.find((d) => d.periodMonth === "2026-10-01");
+    const novDue = dueRows.find((d) => d.periodMonth === "2026-11-01");
+    expect(octDue?.amountDuePaise).toBe(100_000); // untouched — already paid
+    expect(novDue?.amountDuePaise).toBe(90_000); // credit slid here
+
+    const reward = (await listStreakRewardsForMember(gymId, m.id))[0]!;
+    expect(reward.status).toBe("applied");
+    expect(reward.appliedDueId).toBe(novDue?.id);
+
+    // idempotent and only one due discounted
+    expect((await applyDueStreakDiscounts(gymId)).applied).toBe(0);
+    const after = await listDuesForMember(gymId, m.id);
+    expect(after.filter((d) => d.amountDuePaise === 90_000)).toHaveLength(1);
+  });
+
+  it("stays earned when there is no pending due yet, then applies on a later run", async () => {
+    const gymId = await seedGym("test_reward Later", 10);
+    cleanupGymIds.push(gymId);
+    const m = await createMember({
+      gymId,
+      name: "test_reward Gina",
+      phone: "9700000007",
+      joinDate: "2026-01-01",
+    });
+    await addCheckins(gymId, m.id, augustOpenDays());
+    await evaluateStreakRewardsForGym(gymId, AS_OF);
+
+    // No due on or after the redeem period exists yet.
+    expect((await applyDueStreakDiscounts(gymId)).applied).toBe(0);
+    expect((await listStreakRewardsForMember(gymId, m.id))[0]!.status).toBe(
+      "earned",
+    );
+
+    // A pending redeem-period due appears; a later run picks it up.
+    await db.insert(dues).values({
+      memberId: m.id,
+      gymId,
+      periodMonth: "2026-10-01",
+      dueDate: "2026-10-01",
+      amountDuePaise: 100_000,
+      status: "pending",
+    });
+
+    expect((await applyDueStreakDiscounts(gymId)).applied).toBe(1);
+    const reward = (await listStreakRewardsForMember(gymId, m.id))[0]!;
+    expect(reward.status).toBe("applied");
+    expect(
+      (await listDuesForMember(gymId, m.id)).find(
+        (d) => d.periodMonth === "2026-10-01",
+      )?.amountDuePaise,
+    ).toBe(90_000);
+  });
 });

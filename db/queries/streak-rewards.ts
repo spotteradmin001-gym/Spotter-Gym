@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, gte, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lt } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { checkins, dues, gyms, members, streakRewards } from "@/db/schema";
@@ -134,10 +134,17 @@ export async function evaluateStreakRewardsForGym(
 }
 
 /**
- * Apply every pending (`earned`) credit whose `redeem_period` now has a pending
- * due: reduce the due by `percent`, link `applied_due_id`, flip the reward to
- * `applied`. The reward row is the lock — flipped first with a status guard —
- * so the discount lands exactly once even under a concurrent run.
+ * Apply every pending (`earned`) credit to a member due: reduce the due by
+ * `percent`, link `applied_due_id`, flip the reward to `applied`. The reward row
+ * is the lock — flipped first with a status guard — so the discount lands
+ * exactly once even under a concurrent run.
+ *
+ * Target due: the member's **oldest** `pending` due whose `period_month` is on
+ * or after `redeem_period`. When the `redeem_period` due itself is still
+ * `pending` that is the one picked; when it is already `paid`/`waived` or was
+ * never generated, the credit slides forward to the next pending due. If the
+ * member has no eligible pending due yet the reward stays `earned` and a later
+ * run retries — so it slides forward automatically as new dues are generated.
  */
 export async function applyDueStreakDiscounts(
   gymId: string,
@@ -161,10 +168,11 @@ export async function applyDueStreakDiscounts(
       .where(
         and(
           eq(dues.memberId, reward.memberId),
-          eq(dues.periodMonth, reward.redeemPeriod),
+          gte(dues.periodMonth, reward.redeemPeriod),
           eq(dues.status, "pending"),
         ),
       )
+      .orderBy(asc(dues.periodMonth))
       .limit(1);
     if (!due) continue;
 

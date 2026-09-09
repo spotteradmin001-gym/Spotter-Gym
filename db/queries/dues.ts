@@ -45,8 +45,9 @@ function mapDue(row: typeof dues.$inferSelect): Due {
  * created.
  *
  * After generation it scores the just-closed billing cycle for the streak
- * reward (CR-9 / 9d) and applies any pending N+2 credit to the dues that now
- * exist. Both steps are inert when `gyms.streak_reward_percent = 0`.
+ * reward (CR-9 / 9d) and applies any pending credit to the member's oldest
+ * pending due on or after its redeem period. Both steps are inert when
+ * `gyms.streak_reward_percent = 0`.
  */
 export async function generateDuesForGym(
   gymId: string,
