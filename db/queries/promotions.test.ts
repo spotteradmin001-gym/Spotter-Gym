@@ -18,6 +18,7 @@ import { createMember } from "./members";
 import {
   PromotionError,
   acknowledgePromotionPrepaid,
+  adminForcePromotionPaid,
   approvePromotionEstimate,
   cancelPromotion,
   createPromotionDraft,
@@ -60,7 +61,19 @@ if (process.env.DATABASE_URL) {
     ).id;
   });
   afterAll(async () => {
-    for (const id of createdGymIds) {
+    // Resolve every fixture gym by name prefix, not just the ids this run
+    // tracked. A prior interrupted run can leave `test_promo` gyms +
+    // promotions behind on the shared preview branch, and the plain
+    // name-prefix gym delete below then trips the promotions FK (RESTRICT).
+    // Clearing children for all of them keeps the suite self-healing.
+    const staleGyms = await db
+      .select({ id: gyms.id })
+      .from(gyms)
+      .where(like(gyms.name, "test_promo %"));
+    const gymIds = [
+      ...new Set([...createdGymIds, ...staleGyms.map((g) => g.id)]),
+    ];
+    for (const id of gymIds) {
       const promoRows = await db
         .select({ id: promotions.id })
         .from(promotions)
@@ -369,6 +382,30 @@ dbSuite("admin transitions", () => {
     const paid = await markPromotionPaid({ promotionId: id });
     expect(paid.status).toBe("paid");
 
+    const sending = await startPromotionSending({ promotionId: id });
+    expect(sending.status).toBe("sending");
+  });
+
+  it("adminForcePromotionPaid walks priced → paid, only from priced (CR-11)", async () => {
+    const id = await submitted();
+
+    await expect(
+      adminForcePromotionPaid({ promotionId: id }),
+    ).rejects.toThrow(/priced/i);
+
+    await pricePromotion({ promotionId: id, perMessagePaise: 25 });
+    const paid = await adminForcePromotionPaid({ promotionId: id });
+    expect(paid.status).toBe("paid");
+    expect(paid.prepaidPaise).toBe(paid.estimatedTotalPaise);
+    expect(paid.approvedAt).not.toBeNull();
+    expect(paid.paidAt).not.toBeNull();
+
+    // stale button — status already moved on
+    await expect(
+      adminForcePromotionPaid({ promotionId: id }),
+    ).rejects.toThrow(/priced/i);
+
+    // the engine can pick it straight up
     const sending = await startPromotionSending({ promotionId: id });
     expect(sending.status).toBe("sending");
   });

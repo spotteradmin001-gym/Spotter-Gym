@@ -775,3 +775,76 @@ budget.
    (not owner/employee-toggleable).
 
 ### All CR-10 decisions resolved (2026-09-08). Ready to plan.
+
+---
+
+## CR-11 — Admin can approve + mark-paid a promotion on the owner's behalf
+
+**Raised:** 2026-09-09, during the post-CR production smoke test.
+
+### Problem
+
+The CR-10 promotion money path splits the steps between two roles:
+
+1. Owner submits the promotion (`submitted`).
+2. Admin prices it (`submitted -> priced`).
+3. **Owner** approves the estimate (`priced -> approved`) — button on
+   `/owner/promotions/[promotionId]`.
+4. **Owner** clicks "I have prepaid" — sets `prepaid_paise`.
+5. **Admin** marks it paid (`approved -> paid`) — only appears once step 4 is
+   done.
+6. **Admin** sends (`paid -> sending`).
+
+There is deliberately no "Approve" button in the admin portal — steps 3 and 4
+are owner-only. In practice the gym owner often forgets to come back and
+approve / mark the estimate prepaid after the admin has priced and quoted them,
+so the promotion stalls at `priced` (or at `approved` with no prepaid flag) and
+the admin cannot move it forward.
+
+### Desired behaviour
+
+Give the platform admin a way to push a stuck promotion through the owner's two
+steps when the owner has paid out-of-band but not clicked the buttons:
+
+- On `/admin/promotions/[promotionId]`, when status is `priced`, a single
+  **"Approve, mark prepaid & mark paid (on owner's behalf)"** control that
+  walks `priced -> approved -> (prepaid_paise set to the estimate) -> paid` in
+  one click.
+- The transition is audited as a single `promotion.paid_by_admin` row so the
+  log shows the admin acted for the owner.
+- The owner-side buttons stay exactly as they are — this is an admin fast-path,
+  not a replacement.
+
+### Scope
+
+UI + server-action only, no schema change:
+
+- `db/queries/promotions.ts` — add `adminForcePromotionPaid({ promotionId })`
+  in the "Admin transitions" section: loads the promotion, requires status
+  `priced` and a non-null `estimated_total_paise`, then in one update sets
+  `status = 'paid'`, `approved_at`, `prepaid_paise = estimated_total_paise`,
+  `paid_at`, `updated_at`. Guard the `WHERE` on `status = 'priced'` so a
+  stale button is a no-op.
+- `app/(protected)/admin/promotions/actions.ts` — new
+  `forcePromotionPaidAction`, guarded by `requireUserForAction("admin")`,
+  wired through `adminPromotionMutation`, audit action `promotion.paid_by_admin`.
+- `app/(protected)/admin/promotions/[promotionId]/page.tsx` — render the single
+  button only while `promo.status === "priced"`.
+- Tests: admin force-paid walks `priced -> paid` with `prepaid_paise` set to
+  the estimate; not allowed from any other status; audit row is
+  `promotion.paid_by_admin`; owner path still works unchanged.
+
+### Decision (owner, 2026-09-09)
+
+**Single combined admin button.** One control on
+`/admin/promotions/[promotionId]`, shown while status is `priced`, that walks
+`priced -> approved -> (prepaid_paise set to the estimate) -> paid` in one
+click. No separate "approve" / "mark prepaid" controls, no three-step version.
+The admin only presses it after the owner's payment has actually landed. Label
+it clearly as acting on the owner's behalf; audit the whole transition (a
+single `promotion.paid_by_admin` row is enough — no need for separate
+per-step audit rows).
+
+The combined action supersedes the need for the admin "Mark paid" button to
+appear separately for this path; the existing owner-side buttons stay
+unchanged as the normal flow.

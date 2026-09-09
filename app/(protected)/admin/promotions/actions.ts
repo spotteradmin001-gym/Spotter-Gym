@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import {
   PromotionError,
+  adminForcePromotionPaid,
   markPromotionPaid,
   markPromotionRefunded,
   pricePromotion,
@@ -101,6 +102,17 @@ export async function markPromotionPaidAction(
     formData,
     (promotionId) => markPromotionPaid({ promotionId }),
     "promotion.paid",
+  );
+}
+
+/** CR-11: approve + mark prepaid + mark paid in one step, on the owner's behalf. */
+export async function forcePromotionPaidAction(
+  formData: FormData,
+): Promise<void> {
+  await adminPromotionMutation(
+    formData,
+    (promotionId) => adminForcePromotionPaid({ promotionId }),
+    "promotion.paid_by_admin",
   );
 }
 
