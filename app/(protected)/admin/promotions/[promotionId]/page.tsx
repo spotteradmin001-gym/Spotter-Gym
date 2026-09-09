@@ -13,11 +13,11 @@ import {
   promotionRecipientTally,
 } from "@/db/queries";
 import { formatPaise } from "@/lib/money";
+import { ownerContactChoices } from "@/lib/promo-owner-contact";
 import {
   PROMOTION_SETTLEMENT_LABEL,
   PROMOTION_STATUS_LABEL,
 } from "@/lib/promo-status";
-import { waLink } from "@/lib/wa-link";
 import {
   promotionBillMessage,
   promotionQuoteMessage,
@@ -30,6 +30,7 @@ import {
   sendPromotionAction,
 } from "../actions";
 import { PricingForm } from "../pricing-form";
+import { OwnerContactPicker } from "./owner-contact-picker";
 
 export const dynamic = "force-dynamic";
 
@@ -50,39 +51,34 @@ export default async function AdminPromotionDetailPage({
   ]);
 
   const gymName = gym?.name ?? "the gym";
-  const ownerPhone = owners.find((o) => o.phone)?.phone ?? null;
+  const ownerChoices = ownerContactChoices(owners);
+  const ownerPhone = ownerChoices[0]?.phone ?? null;
   const parts = partsPerRecipient({
     hasText: promo.hasText,
     hasImage: promo.hasImage,
   });
 
-  const quoteLink =
+  const quoteMessage =
     promo.perMessagePaise != null && promo.estimatedTotalPaise != null
-      ? waLink(
-          ownerPhone,
-          promotionQuoteMessage({
-            gymName,
-            recipientCount: promo.recipientCount,
-            partsPerRecipient: parts,
-            perMessagePaise: promo.perMessagePaise,
-            estimatedTotalPaise: promo.estimatedTotalPaise,
-          }),
-        )
+      ? promotionQuoteMessage({
+          gymName,
+          recipientCount: promo.recipientCount,
+          partsPerRecipient: parts,
+          perMessagePaise: promo.perMessagePaise,
+          estimatedTotalPaise: promo.estimatedTotalPaise,
+        })
       : null;
 
-  const billLink =
+  const billMessage =
     promo.billedTotalPaise != null && promo.perMessagePaise != null
-      ? waLink(
-          ownerPhone,
-          promotionBillMessage({
-            gymName,
-            deliveredParts: tally.deliveredParts,
-            perMessagePaise: promo.perMessagePaise,
-            billedTotalPaise: promo.billedTotalPaise,
-            prepaidPaise: promo.prepaidPaise ?? 0,
-            refundPaise: promo.refundPaise ?? 0,
-          }),
-        )
+      ? promotionBillMessage({
+          gymName,
+          deliveredParts: tally.deliveredParts,
+          perMessagePaise: promo.perMessagePaise,
+          billedTotalPaise: promo.billedTotalPaise,
+          prepaidPaise: promo.prepaidPaise ?? 0,
+          refundPaise: promo.refundPaise ?? 0,
+        })
       : null;
 
   return (
@@ -155,22 +151,15 @@ export default async function AdminPromotionDetailPage({
             />
           )}
 
-          <div className="flex flex-wrap gap-2">
-            {quoteLink && (
-              <a href={quoteLink} target="_blank" rel="noreferrer">
-                <Button size="sm" variant="secondary">
-                  Send quote via WhatsApp
-                </Button>
-              </a>
-            )}
-            {billLink && (
-              <a href={billLink} target="_blank" rel="noreferrer">
-                <Button size="sm" variant="secondary">
-                  Send bill via WhatsApp
-                </Button>
-              </a>
-            )}
+          {(quoteMessage || billMessage) && (
+            <OwnerContactPicker
+              choices={ownerChoices}
+              quoteMessage={quoteMessage}
+              billMessage={billMessage}
+            />
+          )}
 
+          <div className="flex flex-wrap gap-2">
             {["submitted", "priced", "approved"].includes(promo.status) && (
               <form action={rejectPromotionAction}>
                 <input type="hidden" name="promotionId" value={promo.id} />
