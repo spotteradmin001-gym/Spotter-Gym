@@ -6,6 +6,10 @@ raw PowerShell command. It does exactly what `engine/start-engine.ps1` does —
 `send-promotions.mjs` on a timer — but shows Docker / WAHA / loop status and a
 live log.
 
+> Built as a WinForms GUI (`Spotter-Engine.ps1`, launched by `Spotter Engine.cmd`).
+> The first attempt used an `.hta`; Windows Defender quarantines `.hta` files on
+> checkout, so it was replaced.
+
 ## First run
 
 1. `engine/.env` must already be set up (see `engine/README.md`) — the launcher
@@ -14,7 +18,8 @@ live log.
 2. [Docker Desktop](https://www.docker.com/products/docker-desktop/) must be
    installed and running.
 3. Node must be on `PATH` (`node -v` in a terminal).
-4. Double-click **`Spotter-Engine.hta`**.
+4. Double-click **`Spotter Engine.cmd`**. (The PowerShell console stays hidden;
+   only the app window shows.)
 
 ## Using it
 
@@ -31,21 +36,29 @@ live log.
 
 ## Pin it
 
-- **Taskbar / Start:** right-click `Spotter-Engine.hta` → *Show more options* →
-  *Pin to Start*. For the taskbar, make a shortcut to it first
-  (right-click → *Create shortcut*), then drag the shortcut to the taskbar.
+- **Taskbar / Start:** right-click `Spotter Engine.cmd` → *Show more options* →
+  *Pin to Start*. For the taskbar, make a shortcut first
+  (right-click → *Create shortcut*), then drag the shortcut onto the taskbar.
+  Set the shortcut's icon to `spotter-engine.ico` via *Properties → Change Icon*.
 - **Launch on login:** press `Win+R`, type `shell:startup`, Enter, and drop a
-  shortcut to `Spotter-Engine.hta` in that folder. Add `--loop` behaviour by
-  leaving the interval at 15 and pressing Start once after login, or wire a
-  shortcut straight to the daemon:
-  `node "…\engine\launcher\run-engine.mjs" --loop --every 15`.
+  shortcut to `Spotter Engine.cmd` in that folder.
+
+## No GUI
+
+The GUI just wraps the daemon. To skip it entirely:
+
+```
+node engine/launcher/run-engine.mjs --once            # one cycle
+node engine/launcher/run-engine.mjs --loop --every 15 # keep going; Ctrl+C to stop
+```
 
 ## Files
 
 | File | What |
 |---|---|
-| `Spotter-Engine.hta` | the GUI (Windows `mshta.exe`, no install) |
-| `run-engine.mjs` | the daemon — also runnable directly: `node run-engine.mjs --once` |
+| `Spotter Engine.cmd` | double-click target — starts the GUI with the console hidden |
+| `Spotter-Engine.ps1` | the WinForms GUI |
+| `run-engine.mjs` | the daemon — also runnable directly (see above) |
 | `launcher.mjs` | pure helpers (arg parse, cycle summary), unit-tested |
 | `launcher.test.mjs` | tests, run by `npm test` |
 | `make-icon.mjs` | regenerates `spotter-engine.ico` |
