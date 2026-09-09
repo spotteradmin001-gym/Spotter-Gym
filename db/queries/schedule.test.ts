@@ -17,7 +17,6 @@ import {
   closedDates,
   getGymSchedule,
   removeHoliday,
-  scheduleLockBoundary,
   setClosedWeekdays,
 } from "./schedule";
 
@@ -52,16 +51,27 @@ dbSuite("weekly closed days", () => {
   });
 });
 
-dbSuite("holiday CRUD + per-cycle lock", () => {
-  it("computes the lock boundary as the next cycle start", async () => {
-    // anchor day 1, today 15 Sep → current cycle is Sep, next starts 1 Oct
-    expect(await scheduleLockBoundary(gymId, "2026-09-15")).toBe("2026-10-01");
-  });
+dbSuite("holiday CRUD — no cycle lock", () => {
+  it("adds a holiday for a past date and closedDates reflects it right away", async () => {
+    // No `today` guard any more: a date well inside a past cycle is allowed.
+    const h = await addHoliday({
+      gymId,
+      date: "2026-01-15",
+      label: "Retroactive rest day",
+    });
+    expect(h.date).toBe("2026-01-15");
 
-  it("rejects a holiday inside the current or a past cycle", async () => {
-    await expect(
-      addHoliday({ gymId, date: "2026-09-20", label: "Mid-cycle", today: "2026-09-15" }),
-    ).rejects.toThrow(/locked/i);
+    const set = await closedDates(gymId, "2026-01-01", "2026-01-31");
+    expect(set.has("2026-01-15")).toBe(true);
+
+    // removable regardless of how old it is
+    await removeHoliday({ gymId, id: h.id });
+    expect((await getGymSchedule(gymId)).holidays.some((x) => x.id === h.id)).toBe(
+      false,
+    );
+    expect(
+      (await closedDates(gymId, "2026-01-01", "2026-01-31")).has("2026-01-15"),
+    ).toBe(false);
   });
 
   it("adds a future holiday, rejects a duplicate, then lists it", async () => {
@@ -69,34 +79,24 @@ dbSuite("holiday CRUD + per-cycle lock", () => {
       gymId,
       date: "2026-10-05",
       label: "Founders Day",
-      today: "2026-09-15",
     });
     expect(h.date).toBe("2026-10-05");
 
     await expect(
-      addHoliday({ gymId, date: "2026-10-05", label: "again", today: "2026-09-15" }),
+      addHoliday({ gymId, date: "2026-10-05", label: "again" }),
     ).rejects.toThrow(/already on the holiday list/);
 
     const list = (await getGymSchedule(gymId)).holidays;
     expect(list.map((x) => x.date)).toContain("2026-10-05");
   });
 
-  it("removes a future holiday but refuses one that has slipped into a locked cycle", async () => {
-    const h = await addHoliday({
-      gymId,
-      date: "2026-11-10",
-      label: "Temp",
-      today: "2026-10-15",
-    });
-
-    // now "today" is past that date's cycle → locked
+  it("rejects a malformed date and a too-short label", async () => {
     await expect(
-      removeHoliday({ gymId, id: h.id, today: "2026-12-20" }),
-    ).rejects.toThrow(/locked/i);
-
-    // still in the future relative to this "today" → removable
-    await removeHoliday({ gymId, id: h.id, today: "2026-10-15" });
-    expect((await getGymSchedule(gymId)).holidays.some((x) => x.id === h.id)).toBe(false);
+      addHoliday({ gymId, date: "not-a-date", label: "x" }),
+    ).rejects.toBeInstanceOf(ScheduleError);
+    await expect(
+      addHoliday({ gymId, date: "2026-12-25", label: "x" }),
+    ).rejects.toThrow(/label/i);
   });
 });
 
@@ -108,7 +108,6 @@ dbSuite("closedDates", () => {
       gymId,
       date: "2026-10-05",
       label: "Founders Day",
-      today: "2026-09-15",
     }).catch(() => undefined); // may already exist from an earlier test
 
     const set = await closedDates(gymId, "2026-10-01", "2026-10-10");

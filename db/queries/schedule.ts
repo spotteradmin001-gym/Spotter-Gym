@@ -4,7 +4,7 @@ import { and, asc, eq } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { gymHolidays, gyms } from "@/db/schema";
-import { billingCycleWindow, weekdayOf } from "@/lib/billing";
+import { weekdayOf } from "@/lib/billing";
 import { addDays } from "@/lib/streak";
 
 /** Caller-facing failures; the server-action layer maps this to user copy. */
@@ -25,23 +25,14 @@ export type GymSchedule = {
   holidays: GymHoliday[];
 };
 
-async function loadGym(gymId: string): Promise<{
-  anchorDay: number;
-  closedWeekdays: number[];
-}> {
+async function loadGym(gymId: string): Promise<{ closedWeekdays: number[] }> {
   const [row] = await db
-    .select({
-      anchorDay: gyms.billingAnchorDay,
-      closedWeekdays: gyms.closedWeekdays,
-    })
+    .select({ closedWeekdays: gyms.closedWeekdays })
     .from(gyms)
     .where(eq(gyms.id, gymId))
     .limit(1);
   if (!row) throw new ScheduleError("That gym no longer exists.");
-  return {
-    anchorDay: row.anchorDay,
-    closedWeekdays: [...row.closedWeekdays].sort((a, b) => a - b),
-  };
+  return { closedWeekdays: [...row.closedWeekdays].sort((a, b) => a - b) };
 }
 
 export async function getGymSchedule(gymId: string): Promise<GymSchedule> {
@@ -60,21 +51,6 @@ export async function getGymSchedule(gymId: string): Promise<GymSchedule> {
   return { closedWeekdays, holidays: holidayRows };
 }
 
-/**
- * The first calendar day an owner is allowed to add or remove a holiday for.
- * Everything on or after this date is in a future billing cycle; everything
- * before it sits in the current or a past cycle and is locked, so a member
- * cannot have a missed open day retroactively reclassified as a rest day
- * (CR-9 / 9e). The gym-level cycle uses `gyms.billing_anchor_day`.
- */
-export async function scheduleLockBoundary(
-  gymId: string,
-  today: Date | string = new Date(),
-): Promise<string> {
-  const { anchorDay } = await loadGym(gymId);
-  return billingCycleWindow(anchorDay, today).end;
-}
-
 function assertWeekdays(weekdays: number[]): number[] {
   const clean = [...new Set(weekdays)].sort((a, b) => a - b);
   if (clean.some((d) => !Number.isInteger(d) || d < 0 || d > 6)) {
@@ -87,10 +63,10 @@ function assertWeekdays(weekdays: number[]): number[] {
 }
 
 /**
- * Replace the weekly closed-day pattern. Not cycle-locked: this is a
- * forward-looking pattern and `closedDates` applies whatever is current. The
- * one-off holiday list is where the per-cycle lock lives (that is the exact
- * gaming vector called out in 9e).
+ * Replace the weekly closed-day pattern. No cycle lock: `closedDates` always
+ * reads the current pattern, so every member's calendar, current streak and
+ * not-yet-evaluated reward cycles recompute against it immediately. Reward rows
+ * already written (`earned` / `missed`) are historical and are not rewritten.
  */
 export async function setClosedWeekdays(
   gymId: string,
@@ -105,11 +81,16 @@ export async function setClosedWeekdays(
   if (rows.length === 0) throw new ScheduleError("That gym no longer exists.");
 }
 
+/**
+ * Add a one-off holiday for any date — including inside the current or a past
+ * billing cycle. `closedDates` picks it up immediately, so it changes every
+ * affected member's calendar and current streak and any not-yet-evaluated
+ * reward cycle at once. Reward rows already written are not rewritten.
+ */
 export async function addHoliday(input: {
   gymId: string;
   date: string;
   label: string;
-  today?: Date | string;
 }): Promise<GymHoliday> {
   const date = input.date.trim();
   const label = input.label.trim();
@@ -118,13 +99,6 @@ export async function addHoliday(input: {
   }
   if (label.length < 2) throw new ScheduleError("Enter a label for the holiday.");
   if (label.length > 80) throw new ScheduleError("Keep the label under 80 characters.");
-
-  const boundary = await scheduleLockBoundary(input.gymId, input.today);
-  if (date < boundary) {
-    throw new ScheduleError(
-      `The current billing cycle is locked. Pick a date on or after ${boundary}.`,
-    );
-  }
 
   const [existing] = await db
     .select({ id: gymHolidays.id })
@@ -143,22 +117,7 @@ export async function addHoliday(input: {
 export async function removeHoliday(input: {
   gymId: string;
   id: string;
-  today?: Date | string;
 }): Promise<void> {
-  const [row] = await db
-    .select({ date: gymHolidays.date })
-    .from(gymHolidays)
-    .where(and(eq(gymHolidays.id, input.id), eq(gymHolidays.gymId, input.gymId)))
-    .limit(1);
-  if (!row) return; // already gone / wrong gym — no-op
-
-  const boundary = await scheduleLockBoundary(input.gymId, input.today);
-  if (row.date < boundary) {
-    throw new ScheduleError(
-      `That holiday is inside a locked billing cycle and can't be removed.`,
-    );
-  }
-
   await db
     .delete(gymHolidays)
     .where(and(eq(gymHolidays.id, input.id), eq(gymHolidays.gymId, input.gymId)));
