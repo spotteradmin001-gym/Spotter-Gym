@@ -821,10 +821,11 @@ on the desktop (and optionally the Startup folder) that:
   `clampEveryMinutes`, `summariseCycle`, `tailLines`), unit-tested in
   `engine/launcher/launcher.test.mjs` (picked up by the existing
   `engine/**/*.test.mjs` vitest glob).
-- `engine/launcher/Spotter Engine.hta` — the GUI. Plain HTA (Windows
-  `mshta.exe`, zero install). Buttons wired to `run-engine.mjs` via
-  `WScript.Shell`; Stop = `taskkill` the pid from `status.json`; polls
-  `status.json` + `engine.log` every 2 s.
+- `engine/launcher/Spotter-Engine.ps1` + `Spotter Engine.cmd` — the GUI.
+  WinForms, launched by the `.cmd` (console hidden). Buttons spawn
+  `run-engine.mjs`; Stop = `taskkill` the pid from `status.json`; a 2 s timer
+  polls `status.json` + `engine.log`. (First cut was an `.hta`; Windows
+  Defender quarantines `.hta` on checkout, so it was swapped for the `.ps1`.)
 - `engine/launcher/spotter-engine.ico` — generated icon so the taskbar pin
   looks intentional.
 - `engine/launcher/README.md` — pin-to-taskbar + add-to-Startup steps.
