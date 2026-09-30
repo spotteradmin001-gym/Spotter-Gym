@@ -939,7 +939,35 @@ country code only when it is exactly country-code length plus 10 digits
 (for example `919123456789`). Same fix already shipped in DuesDost. Regression
 tests added in `lib/phone.test.ts`.
 
-### Open question
+### Repairing numbers saved before the fix
 
-Members saved before this fix keep the wrong number. They need a one-off
-check and re-save (or a data fix) once the owner decides how to handle it.
+**Status (2026-09-30):** repair script built and tested; production run is
+the owner's step.
+
+`npm run db:repair-phones` (`db/repair-91-phones.ts`, logic in
+`lib/phone-repair.ts`) finds numbers stored as `+91` + 8 digits and puts the
+lost `91` back (`+9123456789` becomes `+919123456789`). It covers
+`members.phone` (unique per gym) and `promotion_recipients.phone` (unique per
+promotion), the only columns `normalizePhone` fills. User and employee
+phones are stored as typed and never had the bug.
+
+- A dry run is the default. It prints the database host, the counts per
+  table, and each change with the numbers masked.
+- `--apply` writes everything in one transaction. It also needs
+  `--expect-host` to match the database it is connected to.
+- If the corrected number is already saved in the same gym or promotion, it
+  is reported as a collision and left unchanged for a person to decide.
+
+Verified on the Neon **preview** branch (`ep-ancient-frog`): real data had 0
+broken numbers in both tables. Throwaway rows proved the repair, collision
+reporting and both host guards; they were deleted afterwards.
+
+**Owner, production (`main` = `ep-small-grass`):** in `E:\whatsapp-gym-stack\Spotter-Gym`
+on `main` after this PR merges, with the production pooled URL in
+`$env:DATABASE_URL`:
+
+```powershell
+npm run db:repair-phones                                            # dry run: read the counts first
+npm run db:repair-phones -- --apply --expect-host ep-small-grass    # then write
+Remove-Item Env:DATABASE_URL
+```
