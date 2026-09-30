@@ -917,3 +917,29 @@ per-step audit rows).
 The combined action supersedes the need for the admin "Mark paid" button to
 appear separately for this path; the existing owner-side buttons stay
 unchanged as the normal flow.
+
+---
+
+## CR-13 — Mobiles starting with 91 stored with the wrong number
+
+**Raised:** 2026-09-30 by the owner.
+
+### Problem
+
+`normalizePhone` in `lib/phone.ts` treated any bare number that already
+started with `91` as if it carried the India country code. A 10-digit Indian
+mobile such as `91234 56789` was therefore stored as `+9123456789` (country
+code missing) instead of `+919123456789`. WhatsApp reminders to those members
+go to a wrong or invalid chat.
+
+### Fix
+
+A bare 10-digit number is always local. The number is taken to include the
+country code only when it is exactly country-code length plus 10 digits
+(for example `919123456789`). Same fix already shipped in DuesDost. Regression
+tests added in `lib/phone.test.ts`.
+
+### Open question
+
+Members saved before this fix keep the wrong number. They need a one-off
+check and re-save (or a data fix) once the owner decides how to handle it.

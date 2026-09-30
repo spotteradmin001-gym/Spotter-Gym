@@ -15,6 +15,12 @@ describe("normalizePhone", () => {
     expect(normalizePhone("917584928285")).toBe("+917584928285");
   });
 
+  it("treats a 10-digit mobile starting with 91 as local", () => {
+    expect(normalizePhone("91234 56789")).toBe("+919123456789");
+    expect(normalizePhone("9123456789")).toBe("+919123456789");
+    expect(normalizePhone("919123456789")).toBe("+919123456789");
+  });
+
   it("respects an explicit country", () => {
     expect(normalizePhone("2025550123", "1")).toBe("+12025550123");
   });

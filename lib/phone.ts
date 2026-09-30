@@ -3,11 +3,12 @@
  * local number; we store it E.164 (`+<country><subscriber>`) and derive the
  * WAHA `chatId` from that.
  *
- * Default country is India (91) — override per call if Spotter ever onboards a
- * gym elsewhere.
+ * Default country is India (91) — pass another code per call if needed.
  */
 
 const DEFAULT_COUNTRY = "91";
+/** Subscriber digits in a local number (India, US: 10). */
+const LOCAL_LENGTH = 10;
 
 export class PhoneError extends Error {
   constructor(message: string) {
@@ -26,7 +27,14 @@ export function normalizePhone(raw: string, country = DEFAULT_COUNTRY): string {
 
   if (s.startsWith("+")) s = s.slice(1);
   else if (s.startsWith("00")) s = s.slice(2);
-  else if (!s.startsWith(country)) s = country + s.replace(/^0+/, "");
+  else {
+    s = s.replace(/^0+/, "");
+    // A 10-digit number is always local, even when it happens to start with
+    // the country code's digits (Indian mobiles like 91234 56789). Only a
+    // number already *longer* than a local one is taken to include the code.
+    const hasCode = s.startsWith(country) && s.length === country.length + LOCAL_LENGTH;
+    if (!hasCode) s = country + s;
+  }
 
   if (!/^\d{8,15}$/.test(s)) {
     throw new PhoneError("Enter a valid phone number.");
